@@ -1,0 +1,525 @@
+{
+  "stac_url": "https://stac.dataspace.copernicus.eu/v1",
+  "config": {
+    "bbox": [
+      127.2,
+      36.2,
+      127.6,
+      36.5
+    ],
+    "collection": "sentinel-1-grd",
+    "window_days": 10,
+    "max_items": 200,
+    "instrument_mode": "IW",
+    "orbit_state": null,
+    "product_type": null,
+    "polarization": null,
+    "sort_by_time_diff": true
+  },
+  "targets": [
+    {
+      "sensor": "ICEYE_ref",
+      "target_date": "2021-01-21",
+      "status": "ok",
+      "search_used": {
+        "collection": "sentinel-1-grd",
+        "bbox": [
+          127.2,
+          36.2,
+          127.6,
+          36.5
+        ],
+        "datetime": "2021-01-11T00:00:00Z/2021-01-31T23:59:59Z",
+        "query": {
+          "sar:instrument_mode": {
+            "eq": "IW"
+          }
+        }
+      },
+      "count_found": 5,
+      "candidates_topk": [
+        {
+          "id": "S1A_IW_GRDH_1SDV_20210122T093147_20210122T093212_036249_04408A_10DA_COG",
+          "datetime": "2021-01-22T09:31:47.126742Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 127,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            125.22905,
+            35.518177,
+            128.347122,
+            37.4184
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1A_IW_GRDH_1SDV_20210117T092343_20210117T092408_036176_043DD9_DC37_COG",
+          "datetime": "2021-01-17T09:23:43.932055Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 54,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            127.143562,
+            36.13905,
+            130.292633,
+            38.039253
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1B_IW_GRDH_1SDV_20210116T213200_20210116T213225_025185_02FFA9_F2AA_COG",
+          "datetime": "2021-01-16T21:32:00.217862Z",
+          "platform": "sentinel-1b",
+          "orbit_state": "descending",
+          "relative_orbit": 134,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S_B",
+          "bbox": [
+            125.922958,
+            35.341972,
+            129.08757,
+            37.250031
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1B_IW_GRDH_1SDV_20210128T213159_20210128T213224_025360_03053A_68E4_COG",
+          "datetime": "2021-01-28T21:31:59.837978Z",
+          "platform": "sentinel-1b",
+          "orbit_state": "descending",
+          "relative_orbit": 134,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S_B",
+          "bbox": [
+            125.922188,
+            35.342037,
+            129.086655,
+            37.250038
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1A_IW_GRDH_1SDV_20210129T092343_20210129T092408_036351_0443F7_9C08_COG",
+          "datetime": "2021-01-29T09:23:43.612726Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 54,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            127.143944,
+            36.139065,
+            130.292969,
+            38.039219
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        }
+      ]
+    },
+    {
+      "sensor": "UMBRA_ref",
+      "target_date": "2024-07-17",
+      "status": "ok",
+      "search_used": {
+        "collection": "sentinel-1-grd",
+        "bbox": [
+          127.2,
+          36.2,
+          127.6,
+          36.5
+        ],
+        "datetime": "2024-07-07T00:00:00Z/2024-07-27T23:59:59Z",
+        "query": {
+          "sar:instrument_mode": {
+            "eq": "IW"
+          }
+        }
+      },
+      "count_found": 3,
+      "candidates_topk": [
+        {
+          "id": "S1A_IW_GRDH_1SDV_20240717T093201_20240717T093226_054799_06AC4E_5EF4_COG",
+          "datetime": "2024-07-17T09:32:01.850825Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 127,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            125.231789,
+            35.518444,
+            128.34938,
+            37.418457
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1A_IW_GRDH_1SDV_20240712T092358_20240712T092423_054726_06A9BD_1676_COG",
+          "datetime": "2024-07-12T09:23:58.737978Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 54,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            127.147003,
+            36.139294,
+            130.295471,
+            38.039307
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1A_IW_GRDH_1SDV_20240724T092358_20240724T092423_054901_06AFD4_4A66_COG",
+          "datetime": "2024-07-24T09:23:58.324406Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 54,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            127.147675,
+            36.139423,
+            130.296036,
+            38.039417
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        }
+      ]
+    },
+    {
+      "sensor": "Capella_ref",
+      "target_date": "2024-08-19",
+      "status": "ok",
+      "search_used": {
+        "collection": "sentinel-1-grd",
+        "bbox": [
+          127.2,
+          36.2,
+          127.6,
+          36.5
+        ],
+        "datetime": "2024-08-09T00:00:00Z/2024-08-29T23:59:59Z",
+        "query": {
+          "sar:instrument_mode": {
+            "eq": "IW"
+          }
+        }
+      },
+      "count_found": 7,
+      "candidates_topk": [
+        {
+          "id": "S1A_IW_GRDH_1SDV_20240817T092358_20240817T092423_055251_06BC37_EDEC_COG",
+          "datetime": "2024-08-17T09:23:58.383513Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 54,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            127.145149,
+            36.139271,
+            130.293777,
+            38.039371
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1A_IW_GRDH_1SDV_20240817T092358_20240817T092423_055251_06BC37_56E6_COG",
+          "datetime": "2024-08-17T09:23:58.383513Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 54,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            127.145149,
+            36.139271,
+            130.293777,
+            38.039371
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1A_IW_GRDH_1SDV_20240822T093201_20240822T093226_055324_06BEF8_89CC_COG",
+          "datetime": "2024-08-22T09:32:01.905578Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 127,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            125.229889,
+            35.518429,
+            128.347534,
+            37.418526
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1A_IW_GRDH_1SDV_20240822T093201_20240822T093226_055324_06BEF8_0477_COG",
+          "datetime": "2024-08-22T09:32:01.905578Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 127,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            125.229889,
+            35.518429,
+            128.347534,
+            37.418526
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1A_IW_GRDH_1SDV_20240810T093201_20240810T093226_055149_06B88C_B4EA_COG",
+          "datetime": "2024-08-10T09:32:01.594912Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 127,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            125.230431,
+            35.518414,
+            128.348068,
+            37.418507
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1A_IW_GRDH_1SDV_20240810T093201_20240810T093226_055149_06B88C_6110_COG",
+          "datetime": "2024-08-10T09:32:01.594912Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 127,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            125.230431,
+            35.518414,
+            128.348068,
+            37.418507
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        },
+        {
+          "id": "S1A_IW_GRDH_1SDV_20240829T092358_20240829T092423_055426_06C2AF_C333_COG",
+          "datetime": "2024-08-29T09:23:58.654628Z",
+          "platform": "sentinel-1a",
+          "orbit_state": "ascending",
+          "relative_orbit": 54,
+          "instrument_mode": "IW",
+          "polarization": null,
+          "product_type": "IW_GRDH_1S",
+          "bbox": [
+            127.144028,
+            36.139256,
+            130.292694,
+            38.039391
+          ],
+          "assets": [
+            "Product",
+            "safe_manifest",
+            "schema-calibration-vh",
+            "schema-calibration-vv",
+            "schema-noise-vh",
+            "schema-noise-vv",
+            "schema-product-vh",
+            "schema-product-vv",
+            "thumbnail",
+            "vh",
+            "vv"
+          ]
+        }
+      ]
+    }
+  ]
+}

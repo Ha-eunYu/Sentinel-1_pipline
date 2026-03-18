@@ -1,0 +1,41 @@
+name: s1_pipeline
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10
+
+  # core
+  - pip
+  - requests
+  - python-dotenv
+  - pydantic
+
+  # STAC
+  - pystac-client
+  - pystac
+
+  # geospatial (향후 필요)
+  - rasterio
+  - gdal
+
+  # data
+  - pandas
+  - numpy
+
+  # database
+  - sqlite
+
+  # S3 / MinIO
+  - boto3
+  - s3fs
+
+  # utilities
+  - tqdm
+  - rich
+  - click
+
+  - pip:
+      - shapely
