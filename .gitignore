@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Editors
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local outputs
+downloads/
+outputs/
+tmp/
+temp/
+
+# Data / satellite products
+*.SAFE
+*.zip
+*.tar
+*.tif
+*.tiff
+*.nc
+
+# SQLite / catalog
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# MinIO / cache / misc
+.cache/
