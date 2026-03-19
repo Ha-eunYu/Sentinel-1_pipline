@@ -10,7 +10,7 @@ from stac.search_s1 import list_s1_items_for_date
 
 
 def main() -> None:
-    load_env("s2/.env")  # 현재 사용자 환경 반영
+    load_env(".env")  # 현재 사용자 환경 반영
 
     cdse_cfg = CDSEConfig()
     out_cfg = OutputConfig()
