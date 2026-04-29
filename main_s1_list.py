@@ -7,7 +7,7 @@ from config import CDSEConfig, OutputConfig, load_env
 from stac.client import open_cdse_stac_client
 from stac.models import S1SearchConfig
 from stac.search_s1 import list_s1_items_for_date
-from stac.download_s1 import get_cdse_access_token, download_odata_product
+from stac.download_s1 import get_cdse_access_token, choose_download_url, download_odata_cdse
 
 def main() -> None:
     load_env(".env")  # 현재 사용자 환경 반영
@@ -69,6 +69,7 @@ def main() -> None:
             print(f"       product_type={cand['product_type']}")
             print(f"       assets={cand['assets']}")
             print(f"       product_href={cand['product_href']}")
+            print(f"       zipper_url={cand['zipper_url']}")
             selected_items.append(cand)
             
             # # Jeddah pre/post pair:
@@ -85,16 +86,27 @@ def main() -> None:
 
     access_token = get_cdse_access_token()
     download_dir = out_cfg.out_dir / "sentinel1"
-    
-    for cand in selected_items:
-        url = cand.get("zipper_url")
 
-        if not url:
-            print(f"SKIP no zipper url: {cand['id']}")
+    for cand in selected_items:
+        try:
+            out_file = download_dir / f"{cand['id']}.zip"
+
+            product_url = choose_download_url(
+                zipper_url=cand.get("zipper_url"),
+                product_href=cand.get("product_href"),
+                allow_fallback=True,
+            )
+            
+            status = download_odata_cdse(product_url, out_file, access_token)
+            
+            if status == "skipped":
+                continue
+        
+        except Exception as e:
+            print(f"ERROR downloading {cand['id']}: {e}")
+            status = "error"
             continue
 
-        out_file = download_dir / f"{cand['id']}.zip"
-        download_odata_product(url, out_file, access_token)
 
 if __name__ == "__main__":
     main()

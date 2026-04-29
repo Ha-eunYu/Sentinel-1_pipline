@@ -24,32 +24,39 @@ def _safe_get_int(properties: Dict[str, Any], *keys: str) -> Optional[int]:
             continue
     return None
 
-def _extract_product_id(product_href: str) -> str | None:
-    if not product_href:
-        return None
 
-    match = re.search(r"Products\(([^)]+)\)", product_href)
-    return match.group(1) if match else None
-
-
-def _to_zipper_url(product_id: str | None) -> str | None:
-    if not product_id:
-        return None
-
-    return f"https://zipper.dataspace.copernicus.eu/odata/v1/Products({product_id})/$value"
-
-
-def extract_product_id(product_href: str) -> str:
+def extract_product_id(product_href: str, *, strict: bool = True) -> str | None:
+    '''
+    strict=True (강제 모드): 
+        product_href에서 product_id를 추출하지 못하면 ValueError 발생 → 프로그램 중단 (다운로드 URL 생성 실패 방지)
+    strict=False (유연 모드): 
+        product_href에서 product_id를 추출하지 못하면 product_id = None(STAC 검색 결과 요약에서 product_id 누락) 
+        → product_id 없음 → zipper_url 없음 → 다운로드 자체 불가능
+    '''
     match = re.search(r"Products\(([^)]+)\)", product_href)
     if not match:
-        raise ValueError(f"Cannot extract product id from: {product_href}")
+        if strict:
+            raise ValueError(f"Cannot extract product id from: {product_href}")
+        return None
     return match.group(1)
 
-def to_zipper_url(product_href: str) -> str:
-    product_id = extract_product_id(product_href)
+
+def build_zipper_url(product_id: str | None) -> str | None:
+    if not product_id:
+        return None
     return f"https://zipper.dataspace.copernicus.eu/odata/v1/Products({product_id})/$value"
 
-def _extract_s1_summary(item) -> S1ItemSummary:
+
+def to_zipper_url(product_href: str) -> str:
+    '''
+    OData product URL에서 product_id를 추출하여 Zipper 다운로드 URL로 변환
+    zipper_url = to_zipper_url(product_href)
+    '''
+    product_id = extract_product_id(product_href, strict=True)
+    return build_zipper_url(product_id)
+
+
+def extract_s1_summary(item) -> S1ItemSummary:
     props = item.properties or {}
     assets = item.assets or {}
 
@@ -59,8 +66,8 @@ def _extract_s1_summary(item) -> S1ItemSummary:
 
     if "product" in assets:
         product_href = assets["product"].href
-        product_id = _extract_product_id(product_href)
-        zipper_url = _to_zipper_url(product_id)
+        product_id = extract_product_id(product_href, strict=False)
+        zipper_url = build_zipper_url(product_id)
 
     return S1ItemSummary(
         id=item.id,
@@ -78,13 +85,14 @@ def _extract_s1_summary(item) -> S1ItemSummary:
         zipper_url=zipper_url,   
     )
 
-def _score_item(item, target_dt: datetime) -> Tuple[float, datetime]:
+
+def score_item(item, target_dt: datetime) -> Tuple[float, datetime]:
     dt = to_dt_utc(item.properties["datetime"])
     dt_diff_hours = abs((dt - target_dt).total_seconds()) / 3600.0
     return (dt_diff_hours, dt)
 
 
-def _build_query(cfg: S1SearchConfig) -> Dict[str, Any]:
+def build_query(cfg: S1SearchConfig) -> Dict[str, Any]:
     query: Dict[str, Any] = {}
 
     if cfg.instrument_mode:
@@ -109,11 +117,11 @@ def list_s1_items_for_date(
     target_date: str,
     cfg: S1SearchConfig,
     k: int = 20,
-) -> Dict[str, Any]:
+    ) -> Dict[str, Any]:
     target_dt = datetime.fromisoformat(target_date).replace(tzinfo=timezone.utc)
     datetime_range = make_datetime_range(target_date, cfg.window_days)
 
-    query = _build_query(cfg)
+    query = build_query(cfg)
 
     search = client.search(
         collections=[cfg.collection],
@@ -143,11 +151,11 @@ def list_s1_items_for_date(
         }
 
     if cfg.sort_by_time_diff:
-        items = sorted(items, key=lambda x: _score_item(x, target_dt))
+        items = sorted(items, key=lambda x: score_item(x, target_dt))
     else:
         items = sorted(items, key=lambda x: x.properties.get("datetime", ""))
 
-    topk = [_extract_s1_summary(it).__dict__ for it in items[:k]]
+    topk = [extract_s1_summary(it).__dict__ for it in items[:k]]
 
     return {
         "target_date": target_date,
