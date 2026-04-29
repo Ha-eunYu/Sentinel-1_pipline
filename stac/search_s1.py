@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-
 from stac.models import S1ItemSummary, S1SearchConfig, make_datetime_range, to_dt_utc
-
+import re
 
 def _safe_get_str(properties: Dict[str, Any], *keys: str) -> Optional[str]:
     for k in keys:
@@ -25,9 +24,44 @@ def _safe_get_int(properties: Dict[str, Any], *keys: str) -> Optional[int]:
             continue
     return None
 
+def _extract_product_id(product_href: str) -> str | None:
+    if not product_href:
+        return None
+
+    match = re.search(r"Products\(([^)]+)\)", product_href)
+    return match.group(1) if match else None
+
+
+def _to_zipper_url(product_id: str | None) -> str | None:
+    if not product_id:
+        return None
+
+    return f"https://zipper.dataspace.copernicus.eu/odata/v1/Products({product_id})/$value"
+
+
+def extract_product_id(product_href: str) -> str:
+    match = re.search(r"Products\(([^)]+)\)", product_href)
+    if not match:
+        raise ValueError(f"Cannot extract product id from: {product_href}")
+    return match.group(1)
+
+def to_zipper_url(product_href: str) -> str:
+    product_id = extract_product_id(product_href)
+    return f"https://zipper.dataspace.copernicus.eu/odata/v1/Products({product_id})/$value"
 
 def _extract_s1_summary(item) -> S1ItemSummary:
     props = item.properties or {}
+    assets = item.assets or {}
+
+    product_href = None
+    product_id = None
+    zipper_url = None
+
+    if "product" in assets:
+        product_href = assets["product"].href
+        product_id = _extract_product_id(product_href)
+        zipper_url = _to_zipper_url(product_id)
+
     return S1ItemSummary(
         id=item.id,
         datetime=props.get("datetime"),
@@ -38,9 +72,11 @@ def _extract_s1_summary(item) -> S1ItemSummary:
         polarization=_safe_get_str(props, "s1:polarization", "polarization"),
         product_type=_safe_get_str(props, "product:type", "productType"),
         bbox=getattr(item, "bbox", None),
-        assets=sorted(list((item.assets or {}).keys())),
+        assets=sorted(list(assets.keys())),
+        product_href=product_href,
+        product_id=product_id,
+        zipper_url=zipper_url,   
     )
-
 
 def _score_item(item, target_dt: datetime) -> Tuple[float, datetime]:
     dt = to_dt_utc(item.properties["datetime"])

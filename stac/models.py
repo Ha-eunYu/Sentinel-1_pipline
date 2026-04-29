@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional
 @dataclass
 class S1SearchConfig:
     bbox: List[float]                     # [minLon, minLat, maxLon, maxLat]
-    collection: str = "sentinel-1-grd"   # or "sentinel-1-slc"
+    # collection: str = "sentinel-1-grd"   # or "sentinel-1-slc"
+    collection: str = "sentinel-1-slc"   # or "sentinel-1-slc"
     window_days: int = 3                 # ±N days
     max_items: int = 200
     instrument_mode: Optional[str] = "IW"
@@ -33,7 +34,9 @@ class S1ItemSummary:
     product_type: Optional[str]
     bbox: Optional[List[float]]
     assets: List[str]
-
+    product_href: Optional[str] = None
+    product_id: Optional[str] = None
+    zipper_url: Optional[str] = None  
 
 def to_dt_utc(s: str) -> datetime:
     if s.endswith("Z"):
