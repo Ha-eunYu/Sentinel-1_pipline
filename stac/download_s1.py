@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Optional
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 TOKEN_URL = (
@@ -50,6 +52,23 @@ def get_cdse_access_token() -> str:
     r.raise_for_status()
     return r.json()["access_token"]
 
+def make_session():
+    session = requests.Session()
+
+    retry = Retry(
+        total=10,
+        connect=5,
+        read=5,
+        backoff_factor=10,
+        status_forcelist=[500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+
+    return session
+
 
 def download_odata_cdse(
     product_url: str,
@@ -76,21 +95,28 @@ def download_odata_cdse(
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if out_path.exists() and not overwrite:
-        print(f"SKIP existing: {out_path}")
-        return "skipped"
-
     tmp_path = out_path.with_suffix(out_path.suffix + ".part")
 
     headers = {
         "Authorization": f"Bearer {access_token}",
     }
 
+        # ⭐ 이어받기 핵심
+    downloaded = 0
+    if tmp_path.exists():
+        downloaded = tmp_path.stat().st_size
+        headers["Range"] = f"bytes={downloaded}-"
+        print(f"Resume from {downloaded / 1024**3:.2f} GB")
+
     print(f"Downloading OData product:")
     print(f"  {product_url}")
     print(f"  -> {out_path}")
 
-    with requests.Session() as session:
+    if out_path.exists() and not overwrite:
+        print(f"SKIP existing: {out_path}")
+        return "skipped", out_path
+
+    with make_session() as session:
         session.headers.update(headers)
 
         with session.get(
@@ -99,13 +125,19 @@ def download_odata_cdse(
             timeout=timeout,
             allow_redirects=True,
         ) as r:
+            
             print(f"HTTP status: {r.status_code}")
-            r.raise_for_status()
+        
+            # 206 = partial content (resume 성공)
+            if r.status_code not in (200, 206):
+                r.raise_for_status()
 
-            downloaded = 0
+            mode = "ab" if downloaded > 0 else "wb"
+
+            # downloaded = 0
             last_print = time.time()
 
-            with tmp_path.open("wb") as f:
+            with tmp_path.open(mode) as f:
                 for chunk in r.iter_content(chunk_size=chunk_size):
                     if not chunk:
                         continue

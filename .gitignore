@@ -36,6 +36,7 @@ temp/
 
 # Data / satellite products
 *.SAFE
+*.SAFE/
 *.zip
 *.tar
 *.tif

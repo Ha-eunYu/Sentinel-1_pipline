@@ -97,7 +97,7 @@ def main() -> None:
                 allow_fallback=True,
             )
             
-            status = download_odata_cdse(product_url, out_file, access_token)
+            status, saved_path = download_odata_cdse(product_url, out_file, access_token)
             
             if status == "skipped":
                 continue
