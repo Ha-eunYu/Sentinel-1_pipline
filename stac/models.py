@@ -7,7 +7,9 @@ from typing import Any, Dict, List, Optional
 
 @dataclass
 class S1SearchConfig:
-    bbox: List[float]                     # [minLon, minLat, maxLon, maxLat]
+    # bbox: List[float]                     # [minLon, minLat, maxLon, maxLat]
+    bbox: Optional[List[float]] = None
+    intersects_geojson: Optional[Dict[str, Any]] = None
     # collection: str = "sentinel-1-grd"   # or "sentinel-1-slc"
     collection: str = "sentinel-1-slc"   # or "sentinel-1-slc"
     window_days: int = 3                 # ±N days
@@ -18,6 +20,10 @@ class S1SearchConfig:
     polarization: Optional[str] = None   # e.g. DV, DH, SV, SH
     sort_by_time_diff: bool = True
 
+    def __post_init__(self) -> None:
+        if self.bbox is None and self.intersects_geojson is None:
+            raise ValueError("Either bbox or intersects_geojson must be provided.")
+        
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 

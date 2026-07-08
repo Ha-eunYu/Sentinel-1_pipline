@@ -111,6 +111,20 @@ def build_query(cfg: S1SearchConfig) -> Dict[str, Any]:
 
     return query
 
+def parse_target_datetime_utc(s: str) -> datetime:
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+def score_item(item, target_dt: datetime) -> tuple[float, datetime]:
+    dt_str = (item.properties or {}).get("datetime")
+    if not dt_str:
+        return (float("inf"), datetime.max.replace(tzinfo=timezone.utc))
+
+    dt = to_dt_utc(dt_str)
+    dt_diff_hours = abs((dt - target_dt).total_seconds()) / 3600.0
+    return (dt_diff_hours, dt)
 
 def list_s1_items_for_date(
     client,
@@ -123,13 +137,21 @@ def list_s1_items_for_date(
 
     query = build_query(cfg)
 
-    search = client.search(
-        collections=[cfg.collection],
-        bbox=cfg.bbox,
-        datetime=datetime_range,
-        query=query if query else None,
-        limit=min(cfg.max_items, 100),
-    )
+    search_kwargs = {
+        "collections": [cfg.collection],
+        "datetime": datetime_range,
+        "query": query if query else None,
+        "limit": min(cfg.max_items, 100),
+    }
+
+    if cfg.intersects_geojson is not None:
+        search_kwargs["intersects"] = cfg.intersects_geojson
+    elif cfg.bbox is not None:
+        search_kwargs["bbox"] = cfg.bbox
+    else:
+        raise ValueError("Either cfg.intersects_geojson or cfg.bbox must be provided.")
+
+    search = client.search(**search_kwargs)
 
     items = []
     for it in search.items():
@@ -145,6 +167,7 @@ def list_s1_items_for_date(
             "search_used": {
                 "collection": cfg.collection,
                 "bbox": cfg.bbox,
+                "intersects_geojson": cfg.intersects_geojson,
                 "datetime": datetime_range,
                 "query": query,
             },
@@ -163,6 +186,7 @@ def list_s1_items_for_date(
         "search_used": {
             "collection": cfg.collection,
             "bbox": cfg.bbox,
+            "intersects_geojson": cfg.intersects_geojson,
             "datetime": datetime_range,
             "query": query,
         },

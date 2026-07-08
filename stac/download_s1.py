@@ -69,6 +69,9 @@ def make_session():
 
     return session
 
+from typing import Literal
+
+DownloadStatus = Literal["downloaded", "skipped"]
 
 def download_odata_cdse(
     product_url: str,
@@ -78,7 +81,7 @@ def download_odata_cdse(
     chunk_size: int = 1024 * 1024,
     timeout: tuple[int, int] = (60, 600),
     overwrite: bool = False,
-) -> Path:
+) -> tuple[DownloadStatus, Path]:
 # ) -> None:
     """
     URL 하나를 SAFE zip 파일로 스트리밍 다운로드한다.
@@ -132,7 +135,16 @@ def download_odata_cdse(
             if r.status_code not in (200, 206):
                 r.raise_for_status()
 
-            mode = "ab" if downloaded > 0 else "wb"
+            # mode = "ab" if downloaded > 0 else "wb"
+            if downloaded > 0 and r.status_code == 200:
+                print("Server ignored Range request. Restarting download.")
+                tmp_path.unlink(missing_ok=True)
+                downloaded = 0
+                mode = "wb"
+            elif r.status_code == 206:
+                mode = "ab"
+            else:
+                mode = "wb"
 
             # downloaded = 0
             last_print = time.time()
@@ -149,6 +161,7 @@ def download_odata_cdse(
                         print(f"  downloaded: {downloaded / 1024**3:.2f} GB")
                         last_print = time.time()
 
-    tmp_path.rename(out_path)
+    # tmp_path.rename(out_path)
+    tmp_path.replace(out_path)
     print(f"✅ Downloaded: {out_path}")
     return "downloaded", out_path

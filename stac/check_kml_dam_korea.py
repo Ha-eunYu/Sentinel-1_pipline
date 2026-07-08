@@ -15,7 +15,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point, LineString, Polygon, GeometryCollection
 from shapely.geometry.base import BaseGeometry
-
+import geopandas as gpd
 
 NATURAL_EARTH_URL = (
     "https://naturalearth.s3.amazonaws.com/"

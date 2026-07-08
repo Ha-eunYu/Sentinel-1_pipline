@@ -8,6 +8,85 @@ from stac.client import open_cdse_stac_client
 from stac.models import S1SearchConfig
 from stac.search_s1 import list_s1_items_for_date
 from stac.download_s1 import get_cdse_access_token, choose_download_url, download_odata_cdse
+# import geopandas as gpd
+
+# def bbox_from_shp(shp_path: str | Path) -> list[float]:
+#     shp_path = Path(shp_path)
+
+#     if not shp_path.exists():
+#         raise FileNotFoundError(f"Shapefile not found: {shp_path}")
+
+#     gdf = gpd.read_file(shp_path)
+
+#     if gdf.empty:
+#         raise ValueError(f"Shapefile is empty: {shp_path}")
+
+#     if gdf.crs is None:
+#         raise ValueError(
+#             "Shapefile CRS is missing. "
+#             "STAC bbox requires EPSG:4326 lon/lat coordinates."
+#         )
+
+#     # STAC bbox는 lon/lat 기준이므로 EPSG:4326으로 변환
+#     gdf = gdf.to_crs("EPSG:4326")
+
+#     minx, miny, maxx, maxy = gdf.total_bounds
+
+#     return [
+#         float(minx),
+#         float(miny),
+#         float(maxx),
+#         float(maxy),
+#     ]
+
+def load_geojson_geometry(path: str | Path) -> dict:
+    path = Path(path)
+
+    if not path.exists():
+        raise FileNotFoundError(f"GeoJSON file not found: {path}")
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+
+    geojson_type = data.get("type")
+
+    geometry_types = {
+        "Point",
+        "MultiPoint",
+        "LineString",
+        "MultiLineString",
+        "Polygon",
+        "MultiPolygon",
+        "GeometryCollection",
+    }
+
+    if geojson_type in geometry_types:
+        return data
+
+    if geojson_type == "Feature":
+        geom = data.get("geometry")
+        if geom is None:
+            raise ValueError(f"GeoJSON Feature has no geometry: {path}")
+        return geom
+
+    if geojson_type == "FeatureCollection":
+        geoms = [
+            feature.get("geometry")
+            for feature in data.get("features", [])
+            if feature.get("geometry") is not None
+        ]
+
+        if not geoms:
+            raise ValueError(f"GeoJSON FeatureCollection has no geometries: {path}")
+
+        if len(geoms) == 1:
+            return geoms[0]
+
+        return {
+            "type": "GeometryCollection",
+            "geometries": geoms,
+        }
+
+    raise ValueError(f"Unsupported GeoJSON type: {geojson_type}")
 
 def main() -> None:
     load_env(".env")  # 현재 사용자 환경 반영
@@ -16,21 +95,47 @@ def main() -> None:
     out_cfg = OutputConfig()
     out_cfg.out_dir.mkdir(parents=True, exist_ok=True)
 
+    # cfg = S1SearchConfig(
+    #     bbox = [38.9, 21.2, 39.7, 21.9],   # 예시 AOI
+    #     # bbox=[127.2, 36.2, 127.6, 36.5],   # 예시 AOI
+    #     # collection="sentinel-1-grd",       # "sentinel-1-slc" 로 바꾸면 SLC 검색
+    #     collection="sentinel-1-slc",       # "sentinel-1-slc" 로 바꾸면 SLC 검색
+    #     window_days=10,
+    #     max_items=200,
+    #     instrument_mode="IW",
+    #     orbit_state=None,                  # "ascending" / "descending"
+    #     product_type=None,
+    #     polarization=None,
+    # )
+
+    # korea_shp = Path("data") / "korea_peninsula.shp"
+    # korea_bbox = bbox_from_shp(korea_shp)
+
+    # korea_shp = Path(r"D:/01_GIS_Data/Korea_Peninsula_shp/Korea_Peninsula_shp/Korea_Peninsula.shp")
+    # korea_bbox = bbox_from_shp(korea_shp)
+    # print("Korea bbox:", korea_bbox)
+
+    korea_geojson = Path(r"F:/06_SAR_system/S1/data/korea_peninsula.geojson")
+    korea_geom = load_geojson_geometry(korea_geojson)
+
+
+
     cfg = S1SearchConfig(
-        bbox = [38.9, 21.2, 39.7, 21.9],   # 예시 AOI
-        # bbox=[127.2, 36.2, 127.6, 36.5],   # 예시 AOI
-        # collection="sentinel-1-grd",       # "sentinel-1-slc" 로 바꾸면 SLC 검색
-        collection="sentinel-1-slc",       # "sentinel-1-slc" 로 바꾸면 SLC 검색
+        # bbox=korea_bbox,
+        bbox=None,
+        intersects_geojson=korea_geom,
+        collection="sentinel-1-slc",
         window_days=10,
         max_items=200,
         instrument_mode="IW",
-        orbit_state=None,                  # "ascending" / "descending"
+        orbit_state=None,
         product_type=None,
         polarization=None,
     )
 
     targets = [
-        ("Jeddah_flood", "2022-11-24"),
+        ("Korea_flood", "2026-07-08"),
+        # ("Jeddah_flood", "2022-11-24"),
         # ("ICEYE_ref", "2021-01-21"),
         # ("UMBRA_ref", "2024-07-17"),
         # ("Capella_ref", "2024-08-19"),
@@ -44,6 +149,8 @@ def main() -> None:
         "targets": [],
     }
 
+    selected_items = []
+
     for sensor, date_str in targets:
         print(f"\n=== {sensor} | target={date_str} | collection={cfg.collection} ===")
         res = list_s1_items_for_date(client, date_str, cfg, k=10)
@@ -56,7 +163,6 @@ def main() -> None:
         print("-> search used:", res["search_used"])
         print("-> count found:", res["count_found"])
         
-        selected_items = []
         
         for i, cand in enumerate(res["candidates_topk"], start=1):
             print(f"   [{i}] id={cand['id']}")
@@ -94,7 +200,8 @@ def main() -> None:
             product_url = choose_download_url(
                 zipper_url=cand.get("zipper_url"),
                 product_href=cand.get("product_href"),
-                allow_fallback=True,
+                allow_fallback=False,
+                # allow_fallback=True,
             )
             
             status, saved_path = download_odata_cdse(product_url, out_file, access_token)
