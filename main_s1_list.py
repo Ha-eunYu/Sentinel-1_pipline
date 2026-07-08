@@ -7,7 +7,7 @@ from config import CDSEConfig, OutputConfig, load_env
 from stac.client import open_cdse_stac_client
 from stac.models import S1SearchConfig
 from stac.search_s1 import list_s1_items_for_date
-from stac.download_s1 import get_cdse_access_token, choose_download_url, download_odata_cdse
+from stac.download_s1 import choose_download_url, download_odata_cdse_with_retry
 # import geopandas as gpd
 
 # def bbox_from_shp(shp_path: str | Path) -> list[float]:
@@ -183,7 +183,6 @@ def main() -> None:
 
     print("\n=== Download selected Sentinel-1 SLC products ===")
 
-    access_token = get_cdse_access_token()
     download_dir = out_cfg.out_dir / "sentinel1"
 
     for cand in selected_items:
@@ -196,15 +195,13 @@ def main() -> None:
                 allow_fallback=False,
                 # allow_fallback=True,
             )
-            
-            status, saved_path = download_odata_cdse(product_url, out_file, access_token)
-            
-            if status == "skipped":
-                continue
-        
+
+            # 항목마다 토큰을 새로 받아서 다운로드한다 (CDSE 토큰은 수명이
+            # 짧아, 여러 개를 이어받는 동안 만료되어 401이 나는 것을 방지).
+            download_odata_cdse_with_retry(product_url, out_file)
+
         except Exception as e:
             print(f"ERROR downloading {cand['id']}: {e}")
-            status = "error"
             continue
 
 
