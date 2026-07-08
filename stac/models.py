@@ -50,8 +50,20 @@ def to_dt_utc(s: str) -> datetime:
     return datetime.fromisoformat(s).astimezone(timezone.utc)
 
 
+def parse_target_datetime_utc(s: str) -> datetime:
+    """
+    ISO 날짜/일시 문자열을 UTC datetime으로 변환.
+    타임존 오프셋이 있으면(예: KST "+09:00") 그대로 UTC로 환산하고,
+    없으면 이미 UTC로 간주한다. (오프셋을 버리고 덮어쓰지 않음)
+    """
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def make_datetime_range(target_date: str, window_days: int) -> str:
-    target_dt = datetime.fromisoformat(target_date).replace(tzinfo=timezone.utc)
+    target_dt = parse_target_datetime_utc(target_date)
     start = (target_dt - timedelta(days=window_days)).strftime("%Y-%m-%dT00:00:00Z")
     end = (target_dt + timedelta(days=window_days)).strftime("%Y-%m-%dT23:59:59Z")
     return f"{start}/{end}"

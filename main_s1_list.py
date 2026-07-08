@@ -108,14 +108,7 @@ def main() -> None:
     #     polarization=None,
     # )
 
-    # korea_shp = Path("data") / "korea_peninsula.shp"
-    # korea_bbox = bbox_from_shp(korea_shp)
-
-    # korea_shp = Path(r"D:/01_GIS_Data/Korea_Peninsula_shp/Korea_Peninsula_shp/Korea_Peninsula.shp")
-    # korea_bbox = bbox_from_shp(korea_shp)
-    # print("Korea bbox:", korea_bbox)
-
-    korea_geojson = Path(r"F:/06_SAR_system/S1/data/korea_peninsula.geojson")
+    korea_geojson = Path(__file__).resolve().parent / "Korea_flood_AOI.geojson"
     korea_geom = load_geojson_geometry(korea_geojson)
 
 
@@ -125,7 +118,7 @@ def main() -> None:
         bbox=None,
         intersects_geojson=korea_geom,
         collection="sentinel-1-slc",
-        window_days=10,
+        window_days=15,
         max_items=200,
         instrument_mode="IW",
         orbit_state=None,
@@ -134,7 +127,7 @@ def main() -> None:
     )
 
     targets = [
-        ("Korea_flood", "2026-07-08"),
+        ("Korea_flood", "2026-07-08T18:30:00+09:00"),  # KST 촬영 시각
         # ("Jeddah_flood", "2022-11-24"),
         # ("ICEYE_ref", "2021-01-21"),
         # ("UMBRA_ref", "2024-07-17"),

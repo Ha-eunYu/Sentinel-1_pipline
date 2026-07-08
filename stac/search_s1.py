@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
-from stac.models import S1ItemSummary, S1SearchConfig, make_datetime_range, to_dt_utc
+from typing import Any, Dict, Optional
+from stac.models import (
+    S1ItemSummary,
+    S1SearchConfig,
+    make_datetime_range,
+    parse_target_datetime_utc,
+    to_dt_utc,
+)
 import re
 
 def _safe_get_str(properties: Dict[str, Any], *keys: str) -> Optional[str]:
@@ -86,12 +92,6 @@ def extract_s1_summary(item) -> S1ItemSummary:
     )
 
 
-def score_item(item, target_dt: datetime) -> Tuple[float, datetime]:
-    dt = to_dt_utc(item.properties["datetime"])
-    dt_diff_hours = abs((dt - target_dt).total_seconds()) / 3600.0
-    return (dt_diff_hours, dt)
-
-
 def build_query(cfg: S1SearchConfig) -> Dict[str, Any]:
     query: Dict[str, Any] = {}
 
@@ -111,12 +111,6 @@ def build_query(cfg: S1SearchConfig) -> Dict[str, Any]:
 
     return query
 
-def parse_target_datetime_utc(s: str) -> datetime:
-    dt = datetime.fromisoformat(s)
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
 def score_item(item, target_dt: datetime) -> tuple[float, datetime]:
     dt_str = (item.properties or {}).get("datetime")
     if not dt_str:
@@ -132,7 +126,7 @@ def list_s1_items_for_date(
     cfg: S1SearchConfig,
     k: int = 20,
     ) -> Dict[str, Any]:
-    target_dt = datetime.fromisoformat(target_date).replace(tzinfo=timezone.utc)
+    target_dt = parse_target_datetime_utc(target_date)
     datetime_range = make_datetime_range(target_date, cfg.window_days)
 
     query = build_query(cfg)
@@ -174,11 +168,25 @@ def list_s1_items_for_date(
         }
 
     if cfg.sort_by_time_diff:
-        items = sorted(items, key=lambda x: score_item(x, target_dt))
-    else:
-        items = sorted(items, key=lambda x: x.properties.get("datetime", ""))
+        ranked = sorted(items, key=lambda x: score_item(x, target_dt))
 
-    topk = [extract_s1_summary(it).__dict__ for it in items[:k]]
+        # 목표 시각에 가장 가까운 순으로 상위 k개를 고르되, 검색 결과에 등장한
+        # 위성(platform, 예: S1A/S1C/S1D)이 상위 k에 들지 못해 통째로 누락되는
+        # 일이 없도록 위성별 최근접 후보를 최소 1개씩 보장한다.
+        topk_items = ranked[:k]
+        covered_platforms = {
+            extract_s1_summary(it).platform for it in topk_items
+        }
+        for it in ranked:
+            platform = extract_s1_summary(it).platform
+            if platform not in covered_platforms:
+                topk_items.append(it)
+                covered_platforms.add(platform)
+        topk_items.sort(key=lambda x: score_item(x, target_dt))
+    else:
+        topk_items = sorted(items, key=lambda x: x.properties.get("datetime", ""))[:k]
+
+    topk = [extract_s1_summary(it).__dict__ for it in topk_items]
 
     return {
         "target_date": target_date,
