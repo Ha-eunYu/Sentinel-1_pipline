@@ -51,6 +51,3 @@ temp/
 
 # MinIO / cache / misc
 .cache/
-
-# Third-party reference material (not our code, re-download if needed)
-esa-snappy-master/
