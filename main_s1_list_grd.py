@@ -117,7 +117,7 @@ def main() -> None:
         # bbox=korea_bbox,
         bbox=None,
         intersects_geojson=korea_geom,
-        collection="sentinel-1-slc",
+        collection="sentinel-1-grd",
         window_days=15,
         max_items=200,
         instrument_mode="IW",
@@ -176,14 +176,22 @@ def main() -> None:
             # if cand["id"].startswith("S1A_IW_SLC__1SDV_20221117") or cand["id"].startswith("S1A_IW_SLC__1SDV_20221129"):
             #     selected_item_ids.append(cand["id"])
 
-    out_path = out_cfg.out_dir / "s1_stac_list_manifest.json"
+    # SLC용 manifest(s1_stac_list_manifest.json)를 덮어쓰지 않도록 GRD 전용 파일로 저장
+    out_path = out_cfg.out_dir / "s1_stac_list_manifest_grd.json"
     out_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
 
     print(f"\n✅ Saved manifest: {out_path}")
 
-    print("\n=== Download selected Sentinel-1 SLC products ===")
+    print("\n=== Download selected Sentinel-1 GRD products ===")
 
-    download_dir = out_cfg.out_dir / "sentinel1"
+    # SLC 폴더(sentinel1/)와 섞이지 않도록 분리 — prepro*.py가 sentinel1/의
+    # 첫 zip을 자동 선택하므로 GRD가 섞이면 SLC 체인에 잘못 들어갈 수 있음
+    download_dir = out_cfg.out_dir / "sentinel1_grd"
+
+    # 다운로드 개수 제한 (None = 후보 전부, 테스트 시 1 등으로 제한)
+    max_downloads = None
+    if max_downloads is not None:
+        selected_items = selected_items[:max_downloads]
 
     for cand in selected_items:
         try:

@@ -70,8 +70,10 @@ def extract_s1_summary(item) -> S1ItemSummary:
     product_id = None
     zipper_url = None
 
-    if "product" in assets:
-        product_href = assets["product"].href
+    # SLC 컬렉션은 asset 키가 "product"(소문자), GRD 컬렉션은 "Product"(대문자)
+    product_asset = assets.get("product") or assets.get("Product")
+    if product_asset is not None:
+        product_href = product_asset.href
         product_id = extract_product_id(product_href, strict=False)
         zipper_url = build_zipper_url(product_id)
 
