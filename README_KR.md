@@ -21,7 +21,7 @@ cp .env.example .env
 python main_s1_list.py
 ```
 
-네, **clone 후에는 `main_s1_list.py` 하나만 실행**하면 검색(manifest 저장) + 다운로드까지 한 번에 진행됩니다.
+**clone 후에는 `main_s1_list.py` 하나만 실행**하면 검색(manifest 저장) + 다운로드까지 한 번에 진행됩니다.
 다만 아래 "실행 전 확인할 것"과 "주의사항"은 꼭 먼저 읽어주세요 (특히 디스크 용량 관련).
 
 ## 요구사항
