@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graph>
+  <version>1.0</version>
+  <node id="Read">
+    <operator>Read</operator>
+    <sources/>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+      <bandNames/>
+      <copyMetadata>true</copyMetadata>
+      <file>C:\Users\chlwn\AppData\Local\Temp\claude\f--06-SAR-system-S1\474fcf89-b1c0-4493-90e7-ee980c69af2e\scratchpad\S1C_IW_GRDH_1SDV_20260703T212355_20260703T212417_008384_010976_6942_COG.zip</file>
+      <formatName/>
+      <geometryRegion/>
+      <maskNames/>
+      <pixelRegion/>
+      <polygonRegion/>
+      <useAdvancedOptions>false</useAdvancedOptions>
+      <vectorFile/>
+    </parameters>
+  </node>
+  <node id="Apply-Orbit-File">
+    <operator>Apply-Orbit-File</operator>
+    <sources>
+      <sourceProduct refid="Read"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+      <continueOnFail>false</continueOnFail>
+      <orbitType>Sentinel Precise (Auto Download)</orbitType>
+      <polyDegree>3</polyDegree>
+    </parameters>
+  </node>
+  <node id="ThermalNoiseRemoval">
+    <operator>ThermalNoiseRemoval</operator>
+    <sources>
+      <sourceProduct refid="Apply-Orbit-File"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+      <clipNegativeValues>true</clipNegativeValues>
+      <outputNoise>false</outputNoise>
+      <reIntroduceThermalNoise>false</reIntroduceThermalNoise>
+      <removeThermalNoise>true</removeThermalNoise>
+      <selectedPolarisations>VV</selectedPolarisations>
+    </parameters>
+  </node>
+  <node id="Calibration">
+    <operator>Calibration</operator>
+    <sources>
+      <sourceProduct refid="ThermalNoiseRemoval"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+      <auxFile>Latest Auxiliary File</auxFile>
+      <createBetaBand>false</createBetaBand>
+      <createGammaBand>false</createGammaBand>
+      <externalAuxFile/>
+      <outputBetaBand>true</outputBetaBand>
+      <outputGammaBand>false</outputGammaBand>
+      <outputImageInComplex>false</outputImageInComplex>
+      <outputImageScaleInDb>false</outputImageScaleInDb>
+      <outputSigmaBand>false</outputSigmaBand>
+      <selectedPolarisations>VV</selectedPolarisations>
+      <sourceBandNames/>
+    </parameters>
+  </node>
+  <node id="Speckle-Filter">
+    <operator>Speckle-Filter</operator>
+    <sources>
+      <sourceProduct refid="Calibration"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+      <anSize>50</anSize>
+      <dampingFactor>2</dampingFactor>
+      <enl>1.0</enl>
+      <estimateENL>false</estimateENL>
+      <filter>Refined Lee</filter>
+      <filterSizeX>3</filterSizeX>
+      <filterSizeY>3</filterSizeY>
+      <numLooksStr>1</numLooksStr>
+      <sigmaStr>0.9</sigmaStr>
+      <sourceBandNames/>
+      <targetWindowSizeStr>3x3</targetWindowSizeStr>
+      <windowSize>7x7</windowSize>
+    </parameters>
+  </node>
+  <node id="Terrain-Flattening">
+    <operator>Terrain-Flattening</operator>
+    <sources>
+      <sourceProduct refid="Speckle-Filter"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+      <additionalOverlap>0.1</additionalOverlap>
+      <demName>Copernicus 30m Global DEM</demName>
+      <demResamplingMethod>BILINEAR_INTERPOLATION</demResamplingMethod>
+      <externalDEMApplyEGM>false</externalDEMApplyEGM>
+      <externalDEMFile/>
+      <externalDEMNoDataValue>0</externalDEMNoDataValue>
+      <nodataValueAtSea>true</nodataValueAtSea>
+      <outputSigma0>false</outputSigma0>
+      <outputSimulatedImage>false</outputSimulatedImage>
+      <oversamplingMultiple>1.0</oversamplingMultiple>
+      <sourceBandNames/>
+    </parameters>
+  </node>
+  <node id="Terrain-Correction">
+    <operator>Terrain-Correction</operator>
+    <sources>
+      <sourceProduct refid="Terrain-Flattening"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+      <alignToStandardGrid>false</alignToStandardGrid>
+      <applyRadiometricNormalization>false</applyRadiometricNormalization>
+      <auxFile>Latest Auxiliary File</auxFile>
+      <demName>Copernicus 30m Global DEM</demName>
+      <demResamplingMethod>BILINEAR_INTERPOLATION</demResamplingMethod>
+      <externalAuxFile/>
+      <externalDEMApplyEGM>true</externalDEMApplyEGM>
+      <externalDEMFile/>
+      <externalDEMNoDataValue>0</externalDEMNoDataValue>
+      <imgResamplingMethod>BILINEAR_INTERPOLATION</imgResamplingMethod>
+      <incidenceAngleForGamma0>Use projected local incidence angle from DEM</incidenceAngleForGamma0>
+      <incidenceAngleForSigma0>Use projected local incidence angle from DEM</incidenceAngleForSigma0>
+      <mapProjection>WGS84(DD)</mapProjection>
+      <nodataValueAtSea>true</nodataValueAtSea>
+      <outputComplex>false</outputComplex>
+      <pixelSpacingInDegree>0</pixelSpacingInDegree>
+      <pixelSpacingInMeter>10.0</pixelSpacingInMeter>
+      <saveBetaNought>false</saveBetaNought>
+      <saveDEM>false</saveDEM>
+      <saveGammaNought>false</saveGammaNought>
+      <saveIncidenceAngleFromEllipsoid>false</saveIncidenceAngleFromEllipsoid>
+      <saveLatLon>false</saveLatLon>
+      <saveLayoverShadowMask>false</saveLayoverShadowMask>
+      <saveLocalIncidenceAngle>false</saveLocalIncidenceAngle>
+      <saveProjectedLocalIncidenceAngle>false</saveProjectedLocalIncidenceAngle>
+      <saveSelectedSourceBand>true</saveSelectedSourceBand>
+      <saveSigmaNought>false</saveSigmaNought>
+      <sourceBandNames/>
+      <standardGridOriginX>0</standardGridOriginX>
+      <standardGridOriginY>0</standardGridOriginY>
+    </parameters>
+  </node>
+  <node id="LinearToFromdB">
+    <operator>LinearToFromdB</operator>
+    <sources>
+      <sourceProduct refid="Terrain-Correction"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+      <sourceBandNames/>
+    </parameters>
+  </node>
+  <node id="Write-dB">
+    <operator>Write</operator>
+    <sources>
+      <sourceProduct refid="LinearToFromdB"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+      <clearCacheAfterRowWrite>false</clearCacheAfterRowWrite>
+      <deleteOutputOnFailure>true</deleteOutputOnFailure>
+      <file>downloads\rtc_grd\S1C_IW_GRDH_1SDV_20260703T212355_20260703T212417_008384_010976_6942_COG_rtc_db.tif</file>
+      <formatName>GeoTIFF-BigTIFF</formatName>
+      <writeEntireTileRows>false</writeEntireTileRows>
+    </parameters>
+  </node>
+</graph>

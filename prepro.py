@@ -42,7 +42,7 @@ def write_product(product, path: str | Path, fmt: str = "GeoTIFF") -> None:
 def apply_orbit_file(product):
     params = HashMap()
     params.put("orbitType", "Sentinel Precise (Auto Download)")
-    params.put("polyDegree", 3)
+    params.put("polyDegree", "3")
     params.put("continueOnFail", False)
     return GPF.createProduct("Apply-Orbit-File", params, product)
 
@@ -58,9 +58,9 @@ def topsar_split(
     params.put("subswath", subswath)
     params.put("selectedPolarisations", polarization)
     if first_burst_index is not None:
-        params.put("firstBurstIndex", int(first_burst_index))
+        params.put("firstBurstIndex", str(int(first_burst_index)))
     if last_burst_index is not None:
-        params.put("lastBurstIndex", int(last_burst_index))
+        params.put("lastBurstIndex", str(int(last_burst_index)))
     return GPF.createProduct("TOPSAR-Split", params, product)
 
 
@@ -99,8 +99,8 @@ def topsar_merge(products: list, polarization: str):
 
 def multilook(product, range_looks: int = 1, azimuth_looks: int = 4):
     params = HashMap()
-    params.put("nRgLooks", int(range_looks))
-    params.put("nAzLooks", int(azimuth_looks))
+    params.put("nRgLooks", str(int(range_looks)))
+    params.put("nAzLooks", str(int(azimuth_looks)))
     return GPF.createProduct("Multilook", params, product)
 
 
@@ -116,7 +116,7 @@ def speckle_filter(product, filter_name: str = "Refined Lee", num_looks: int = 4
     return GPF.createProduct("Speckle-Filter", params, product)
 
 
-def terrain_flattening(product, dem_name: str = "Copernicus 30m"):
+def terrain_flattening(product, dem_name: str = "Copernicus 30m Global DEM (Auto Download)"):
     """Beta0 입력 -> 지형 기인 radiometric 왜곡 보정 -> Gamma0(terrain-flattened)."""
     params = HashMap()
     params.put("demName", dem_name)
@@ -129,7 +129,7 @@ def terrain_flattening(product, dem_name: str = "Copernicus 30m"):
     return GPF.createProduct("Terrain-Flattening", params, product)
 
 
-def terrain_correction(product, dem_name: str = "Copernicus 30m", pixel_spacing_m: float = 10.0):
+def terrain_correction(product, dem_name: str = "Copernicus 30m Global DEM (Auto Download)", pixel_spacing_m: float = 10.0):
     """기하보정(geocoding/orthorectification). RTC의 마지막 필수 단계."""
     params = HashMap()
     params.put("demName", dem_name)
@@ -138,7 +138,7 @@ def terrain_correction(product, dem_name: str = "Copernicus 30m", pixel_spacing_
     # params.put("externalDEMFile", "/path/to/dem.tif")
     # params.put("externalDEMNoDataValue", -9999.0)
     # params.put("externalDEMApplyEGM", True)  # dem.tif가 타원체고가 아니라면 True
-    params.put("pixelSpacingInMeter", float(pixel_spacing_m))
+    params.put("pixelSpacingInMeter", str(float(pixel_spacing_m)))
     params.put("imgResamplingMethod", "BILINEAR_INTERPOLATION")
     params.put("demResamplingMethod", "BILINEAR_INTERPOLATION")
     params.put("saveSelectedSourceBand", True)
@@ -182,7 +182,7 @@ def process_s1_slc_to_rtc(
     *,
     subswaths: tuple[str, ...] = ("IW1", "IW2", "IW3"),
     polarization: str = "VV",
-    dem_name: str = "Copernicus 30m",
+    dem_name: str = "Copernicus 30m Global DEM (Auto Download)",
     pixel_spacing_m: float = 10.0,
     range_looks: int = 1,
     azimuth_looks: int = 4,
