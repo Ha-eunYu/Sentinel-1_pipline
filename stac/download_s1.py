@@ -91,7 +91,7 @@ def download_odata_cdse(
     - out_path: 다운로드한 파일을 저장할 경로 (예: /path/to/S1A_IW_SLC__1SDV_20221117.zip)
     - access_token: CDSE 접근 토큰 (get_cdse_access_token()로 발급)
     - chunk_size: 다운로드 스트림에서 읽는 청크 크기 (기본: 1MB)
-    - timeout: (연결 타임아웃, 읽기 타임아웃) 초 단위 (기본: (30, 300))
+    - timeout: (연결 타임아웃, 읽기 타임아웃) 초 단위 (기본: (60, 600))
     - overwrite: 이미 파일이 존재할 때 덮어쓸지 여부 (기본: False)
     Returns:
     - 다운로드된 파일의 경로 (Path 객체)
@@ -146,6 +146,14 @@ def download_odata_cdse(
             else:
                 mode = "wb"
 
+            # 완결성 검증용 기대 크기 계산. Content-Length는 이 응답으로 받을
+            # 바이트 수라, 이어받기(206)면 남은 부분 크기이므로 already에 더한다.
+            content_length = r.headers.get("Content-Length")
+            expected_total = None
+            if content_length is not None:
+                already = downloaded if r.status_code == 206 else 0
+                expected_total = already + int(content_length)
+
             # downloaded = 0
             last_print = time.time()
 
@@ -160,6 +168,16 @@ def download_odata_cdse(
                     if time.time() - last_print > 10:
                         print(f"  downloaded: {downloaded / 1024**3:.2f} GB")
                         last_print = time.time()
+
+    # 스트림이 조기 종료되면(서버가 연결을 정상 종료 모양새로 닫는 경우) 잘린
+    # 파일이 완성본으로 승격될 수 있다. 기대 크기와 비교해 모자라면 예외를 던져
+    # .part를 남긴 채 실패시킨다 -> 재시도/이어받기 로직이 마저 받는다.
+    actual_size = tmp_path.stat().st_size if tmp_path.exists() else 0
+    if expected_total is not None and actual_size < expected_total:
+        raise IOError(
+            f"불완전 다운로드: {actual_size}/{expected_total} bytes "
+            f"({100 * actual_size / expected_total:.1f}%). .part 유지, 재시도 필요: {out_path.name}"
+        )
 
     # tmp_path.rename(out_path)
     tmp_path.replace(out_path)

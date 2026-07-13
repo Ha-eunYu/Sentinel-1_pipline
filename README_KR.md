@@ -1,132 +1,183 @@
-# Sentinel-1 SLC 검색·다운로드 파이프라인
+# Sentinel-1 홍수 모니터링 파이프라인
 
-Copernicus Data Space Ecosystem(CDSE)의 STAC API로 관심 지역(AOI)과 목표 시각에 가장 가까운
-Sentinel-1 SLC 영상을 검색하고, OData(zipper) API로 SAFE(zip) 원본을 다운로드하는 파이프라인입니다.
-현재는 **2026년 7월 한국 홍수 모니터링**을 위해 Sentinel-1A/C/D 위성을 대상으로 설정되어 있습니다.
+Copernicus Data Space Ecosystem(CDSE)에서 Sentinel-1 SLC/GRD를 검색·다운로드하고,
+ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임계값 + HAND
+결합으로 수체를 탐지하는 파이프라인입니다. 현재는 **2026년 7월 한국 홍수 모니터링**
+(홍수일 7/8, AOI: 충청권)을 대상으로 설정되어 있습니다.
 
-(English version: [README_ENG.md](README_ENG.md))
+(English version: [README_ENG.md](README_ENG.md) — 검색·다운로드 부분만 다루는 구버전)
 
-## 결론부터: 클론 후 실행 순서
+## 파이프라인 전체 구조
 
-```bash
-git clone <repo-url>
-cd Sentinel-1_pipline
+```text
+[1] 검색·다운로드 (env: s1_pipeline)
+    main_s1_list.py      SLC  ─┐   CDSE STAC 검색 -> manifest -> zipper 다운로드
+    main_s1_list_grd.py  GRD  ─┘   (이어받기·토큰 자동갱신 지원)
 
-conda env create -f environment.yml
-conda activate s1_pipeline
+[2] RTC 전처리 (env: s1_snappy + SNAP Desktop 설치 필요)
+    prepro_gpt.py        SLC 1장 -> AOI 서브셋 RTC dB   (batch_slc_rtc.py 로 일괄)
+    prepro_grd_gpt.py    GRD 1장 -> 전체 씬 RTC dB      (batch_grd_rtc.py 로 일괄)
+    build_rtc_mosaic.py  날짜별 프레임들을 VRT 모자이크로
 
-cp .env.example .env
-# .env 파일을 열어 CDSE_USERNAME / CDSE_PASSWORD 입력
+[3] 보조 데이터
+    download_hand.py     GLO-30 HAND 타일 (수체 탐지 오탐 제거용)
+    prepare_ngii_dem.py  NGII DEM -> SNAP External DEM 변환 (필요시)
+    compare_dem_rtc.py   Copernicus 30m vs NGII 5m RTC 품질 비교 실험
 
-python main_s1_list.py
+[4] 수체 탐지
+    build_baseline_water.py   pre-event 시계열 -> 기준(평상시) 수체 지도
+    (detect_flood.py 예정: post 영상 확보 후 신규 침수 = post 수체 - baseline)
+
+[보고] export_frames_geojson.py  프레임 현황 GeoJSON (QGIS)
+       export_graph_xml.py       SNAP Desktop GraphBuilder용 그래프 XML
 ```
-
-**clone 후에는 `main_s1_list.py` 하나만 실행**하면 검색(manifest 저장) + 다운로드까지 한 번에 진행됩니다.
-다만 아래 "실행 전 확인할 것"과 "주의사항"은 꼭 먼저 읽어주세요 (특히 디스크 용량 관련).
 
 ## 요구사항
 
 - conda (miniconda/anaconda)
-- CDSE(Copernicus Data Space Ecosystem) 계정 — <https://dataspace.copernicus.eu> 에서 무료 가입
-  - `main_s1_list.py`가 쓰는 인증은 `CDSE_USERNAME`/`CDSE_PASSWORD` (아이디/비밀번호) 방식입니다.
-    OAuth client id/secret이 아닙니다.
-- 여유 디스크 공간 (아래 "주의사항" 참고 — SLC 1개당 5~8GB 내외)
+- CDSE 계정 — <https://dataspace.copernicus.eu> 무료 가입.
+  인증은 `CDSE_USERNAME`/`CDSE_PASSWORD` 방식 (OAuth client id/secret 아님)
+- **ESA SNAP Desktop** (전처리용) — <https://step.esa.int/main/download/snap-download/>
+- 디스크 여유 공간: SLC 1개 5~8GB, GRD 1개 ~1GB, RTC 산출물 별도.
+  입력이 HDD에 있으면 SSD로 복사 후 처리하는 것이 훨씬 빠릅니다 (배치 러너가 자동 수행)
 
 ## 설치
 
-```bash
-conda env create -f environment.yml   # 환경 이름: s1_pipeline
-conda activate s1_pipeline
-```
-
-`.env` 파일은 git에 커밋되지 않습니다(`.gitignore`). `.env.example`을 복사해서 본인 계정 정보를 채워주세요.
+### 환경 1: s1_pipeline (검색·다운로드·보고)
 
 ```bash
-cp .env.example .env
+conda env create -f environment.yml
+cp .env.example .env   # CDSE_USERNAME / CDSE_PASSWORD 입력
 ```
 
-```dotenv
-# .env
-CDSE_USERNAME=본인_CDSE_아이디
-CDSE_PASSWORD=본인_CDSE_비밀번호
+### 환경 2: s1_snappy (SNAP 전처리·분석)
+
+```bash
+conda env create -f environment_snappy.yml
+# SNAP Desktop 설치 후, SNAP의 bin 폴더에서 이 환경의 python을 연결:
+"C:\Program Files\snap\bin\snappy-conf.bat" <s1_snappy 환경의 python.exe 경로>
+# 확인: conda run -n s1_snappy python -c "import esa_snappy"
+```
+
+상세 절차와 배경은 [SNAPPY_GUIDE_KR.md](SNAPPY_GUIDE_KR.md) 참고.
+
+## 실행 순서 (quick start)
+
+```bash
+# 1) 검색 + 다운로드 (SLC와 GRD 각각)
+conda run -n s1_pipeline python main_s1_list.py
+conda run -n s1_pipeline python main_s1_list_grd.py
+
+# 2) RTC 전처리 일괄 실행 (이미 처리된 씬은 자동 스킵 - 재실행 안전)
+conda run -n s1_snappy python batch_grd_rtc.py    # GRD: 전체 씬
+conda run -n s1_snappy python batch_slc_rtc.py    # SLC: 홍수 AOI 서브셋
+
+# 3) 날짜별 모자이크 (QGIS용 VRT)
+conda run -n s1_snappy python build_rtc_mosaic.py
+
+# 4) HAND 다운로드 + 기준 수체 지도
+conda run -n s1_snappy python download_hand.py
+conda run -n s1_snappy python build_baseline_water.py
+
+# (보고) 프레임 현황 GeoJSON -> QGIS에서 status/product 필드로 스타일
+conda run -n s1_pipeline python export_frames_geojson.py
 ```
 
 ## 폴더 구조
 
 ```text
-main_s1_list.py           # 실행 진입점: 검색 -> manifest 저장 -> 다운로드
-config.py                 # .env 로드, CDSEConfig / OutputConfig
-Korea_Peninsula.geojson   # 한반도 전체 폴리곤 (넓은 범위 모니터링용)
-Korea_flood_AOI.geojson   # 이번 홍수 피해 확정 지역 AOI (좁은 범위, 빠른 검색용)
+main_s1_list.py            # SLC 검색 -> manifest -> 다운로드
+main_s1_list_grd.py        # GRD 버전 (manifest·폴더 분리)
+config.py                  # .env 로드, CDSEConfig / OutputConfig
 stac/
-  client.py               # pystac_client로 CDSE STAC 클라이언트 오픈
-  models.py                # S1SearchConfig, 날짜/시간 파싱, datetime range 계산
-  search_s1.py             # STAC 검색 + 목표 시각 근접도 정렬 + 위성별 커버리지 보장
-  download_s1.py           # CDSE 토큰 발급, OData zipper 다운로드(이어받기 지원)
-downloads/                 # 실행 결과물 (git에는 안 올라감)
-  s1_stac_list_manifest.json
-  sentinel1/*.zip
+  client.py                # CDSE STAC 클라이언트
+  models.py                # S1SearchConfig, 날짜 파싱
+  search_s1.py             # 검색 + 목표시각 근접 정렬 + 위성별 커버 보장
+  download_s1.py           # 토큰 발급, zipper 다운로드 (이어받기/재시도)
+prepro_gpt.py              # SLC -> RTC dB (snapista/gpt, AOI 서브셋)
+prepro_grd_gpt.py          # GRD -> RTC dB (전체 씬, --aoi/--dem 옵션)
+prepro.py                  # (참고용) esa_snappy GPF 직접 호출 버전 - 아래 '주의' 참고
+batch_slc_rtc.py           # SLC 일괄 처리 (SSD 복사, 스킵/재개, AOI 미교차 자동 건너뜀)
+batch_grd_rtc.py           # GRD 일괄 처리
+build_rtc_mosaic.py        # 날짜별 RTC 모자이크 VRT
+download_hand.py           # GLO-30 HAND 타일 다운로드 + VRT
+prepare_ngii_dem.py        # (범용) 로컬 DEM -> SNAP External DEM 변환
+compare_dem_rtc.py         # Copernicus 30m vs NGII 5m RTC 비교 실험
+build_baseline_water.py    # pre-event 기준 수체 지도 (dB + HAND)
+export_frames_geojson.py   # 프레임 상태 보고 GeoJSON (SLC+GRD)
+export_graph_xml.py        # SNAP Desktop용 그래프 XML 생성
+graphs/                    # 생성된 그래프 XML (GraphBuilder에서 Load 가능)
+Korea_flood_AOI.geojson    # 홍수 피해 지역 AOI (전처리 서브셋/수체 탐지 기준)
+South_Korea.geojson        # 남한 본토 간략 폴리곤 (검색용 - 제주 미포함 주의)
+Korea_Peninsula.geojson    # 한반도 전체 (광역 검색용)
+SNAPPY_GUIDE_KR.md         # snappy/esa_snappy/SNAPISTA 가이드 (esa-snappy-master 레퍼런스)
+TERRAIN_AUX_DATA_KR.md     # HAND / NGII DEM 가이드
+esa-snappy-master/         # esa-snappy 공식 저장소 사본 (참고 문서·소스)
+downloads/                 # 실행 결과물 (git 미추적)
+  s1_stac_list_manifest.json / s1_stac_list_manifest_grd.json
+  sentinel1/*.zip          # SLC 원본
+  sentinel1_grd/*.zip      # GRD 원본 (COG SAFE, 씬ID가 _COG로 끝남)
+  rtc/                     # SLC RTC dB + 날짜별 모자이크 VRT
+  rtc_grd/                 # GRD RTC dB (+ DEM 비교 실험 산출물)
+  hand/                    # HAND 타일 + hand_aoi.vrt
+  dem/                     # NGII DEM AOI 클립
+  water/                   # 수체 마스크 (baseline_water_union.tif 등)
 ```
 
-## AOI(관심 지역) 설정
+## 설정 포인트
 
-`main_s1_list.py`는 기본적으로 `Korea_flood_AOI.geojson`(홍수 피해 확정 지점 4곳을 감싸는 좁은 bbox)을
-사용하도록 되어 있습니다.
+### AOI (관심 지역)
 
-```python
-korea_geojson = Path(__file__).resolve().parent / "Korea_flood_AOI.geojson"
-```
+- **검색 AOI**: `main_s1_list*.py`의 `korea_geojson` — 현재 `South_Korea.geojson`
+  (본토 간략 폴리곤, **제주도 미포함**이므로 제주가 필요하면 폴리곤 확장 필요)
+- **전처리/수체탐지 AOI**: `Korea_flood_AOI.geojson` — SLC 서브셋과
+  `build_baseline_water.py`의 기준 격자가 이 폴리곤(+0.1도 여유)을 따름
 
-한반도 전체를 넓게 모니터링하고 싶다면 이 줄만 `Korea_Peninsula.geojson`으로 바꾸면 됩니다.
-단, 범위가 넓을수록 검색 결과가 많아지고 원치 않는(동해/서해 먼바다 등) 영상까지 걸릴 수 있으니
-가능하면 `Korea_flood_AOI.geojson`처럼 실제 관심 지역으로 좁히는 것을 권장합니다.
+### 목표 시각
 
-새 지점으로 AOI를 다시 만들고 싶다면 `Korea_flood_AOI.geojson`의 `coordinates`를
-[lon, lat] 순서로 수정하면 됩니다 (bbox 사각형 + 여유 buffer 형태).
+`main_s1_list*.py`의 `targets` 리스트. **타임존 오프셋(+09:00) 필수.**
+`window_days`(현재 15일)가 검색 창을 결정합니다.
 
-## 목표 시각(촬영 시각) 설정
+### 검색 결과 선별 방식
 
-`main_s1_list.py`의 `targets` 리스트에서 검색 기준 시각을 지정합니다.
+목표 시각 근접순 top-k(기본 10) + 검색에 등장한 위성별 최근접 1개 보장.
+**같은 패스의 모든 프레임을 받는 방식이 아니므로**, 특정 날짜의 전체 프레임이
+필요하면 후보에서 빠진 프레임을 ID 지정으로 별도 다운로드해야 합니다
+(프레임 현황은 `export_frames_geojson.py` 결과를 QGIS로 확인).
 
-```python
-targets = [
-    ("Korea_flood", "2026-07-08T18:30:00+09:00"),  # KST 촬영 시각
-]
-```
+### RTC 처리 파라미터 (prepro_gpt.py / prepro_grd_gpt.py)
 
-- **반드시 타임존 오프셋을 포함해서** 적어주세요 (`+09:00` = KST). 오프셋을 빼고 날짜만 쓰면
-  자정(00:00 UTC = 09:00 KST) 기준으로 계산되어 실제 촬영 시각과 어긋난 정렬이 나올 수 있습니다.
-- `window_days`(현재 15일)는 이 목표 시각 앞뒤로 며칠 범위를 검색할지 정합니다. `cfg.window_days`에서 조정하세요.
+- DEM: 기본 `Copernicus 30m Global DEM` (자동 다운로드).
+  GRD는 `--dem <로컬DEM.tif>`로 NGII 5m 등 External DEM 사용 가능
+  (정표고 DEM은 EGM 보정 자동 적용 — [TERRAIN_AUX_DATA_KR.md](TERRAIN_AUX_DATA_KR.md))
+- 스펙클 필터: Refined Lee (기본), `speckle_filter_name`으로 변경 가능
+- 출력: dB GeoTIFF 하나만 (GeoTIFF 쓰기가 단일 스레드 병목이라 이중 쓰기 금지)
 
-## 검색 결과 정렬 방식
+### 수체 탐지 임계값 (build_baseline_water.py)
 
-- `sort_by_time_diff=True`(기본값)이면 목표 시각과의 시간차가 작은 순으로 정렬됩니다.
-- 전체 상위 k개(top-k, 기본 10개)만 뽑을 때, 특정 위성(S1A/S1C/S1D)이 시간차가 조금 더 크다는
-  이유만으로 top-k에서 통째로 빠지지 않도록, **검색 결과에 등장한 위성마다 최근접 후보를 최소 1개씩
-  강제로 포함**시킵니다 (`stac/search_s1.py: list_s1_items_for_date`).
+`수체 = (dB < -16) AND (HAND < 10m)` 이 기본. `--db`, `--hand`로 조정.
 
-## 실행
+## 주의사항
 
-```bash
-python main_s1_list.py
-```
+- **prepro.py(esa_snappy GPF 직접 호출)는 참고용입니다.** 이 방식은 파이썬 JVM에서
+  SNAP 모듈이 완전히 초기화되지 않아 **DEM 자동 다운로드가 동작하지 않고, 에러가
+  파이썬으로 전파되지 않은 채 깨진 GeoTIFF를 만들 수 있습니다.** 실제 처리는
+  반드시 gpt 실행 방식(prepro_gpt.py / prepro_grd_gpt.py)을 쓰세요.
+- **RTC 산출물은 쓰다 만 파일도 열릴 수 있으므로**, 배치가 비정상 종료된 뒤에는
+  해당 씬 산출물을 지우고 재실행하세요 (배치 러너의 정상 실패 처리는 자동 삭제됨).
+- `main_s1_list.py`는 검색된 후보를 **전부** 다운로드합니다. 실행 전 디스크 확인.
+  GRD 변형은 `max_downloads`로 개수 제한 가능.
+- CDSE 다운로드가 네트워크 문제로 끊기면 **같은 명령을 다시 실행** — `.part`
+  이어받기와 토큰 자동 재발급으로 이어집니다.
+- SLC 카탈로그 등록에는 촬영 후 수 시간~하루 지연이 있고, **촬영 계획에 없던
+  지역은 아예 올라오지 않습니다** (같은 궤도의 다른 구간만 공개돼 있다면 그
+  지역은 촬영이 안 된 것). Sentinel-1 반복 주기는 위성당 12일입니다.
+- Windows에서 첫 실행 시 SNAP이 궤도 파일과 DEM 타일을
+  `C:\Users\<user>\.snap\auxdata\`에 내려받으므로 첫 씬 처리가 더 오래 걸립니다.
 
-실행하면:
+## 관련 문서
 
-1. `Korea_flood_AOI.geojson` AOI + `targets`에 설정한 시각 기준으로 CDSE STAC 검색
-2. 검색 결과를 `downloads/s1_stac_list_manifest.json`에 저장
-3. **검색된 후보(top-k) 전부**를 순서대로 `downloads/sentinel1/*.zip`에 다운로드
-   (이미 받은 파일은 자동 스킵, 중간에 끊기면 다음 실행 시 이어받기)
-
-## 주의사항 (실행 전 꼭 확인)
-
-- **`main_s1_list.py`를 그냥 실행하면 검색된 후보를 전부 다운로드합니다.** Sentinel-1 SLC 1개는
-  보통 5~8GB이고, 후보가 여러 개면 순식간에 수십 GB가 필요합니다. 실행 전에 디스크 여유 공간을
-  꼭 확인하세요 (`df -h`). 일부만 받고 싶다면 `main()`의 `selected_items` 루프 앞에서 개수를
-  제한하거나, `list_s1_items_for_date(..., k=원하는개수)`를 줄이세요.
-- CDSE 서버 다운로드가 네트워크 타임아웃으로 중간에 끊기는 경우가 있습니다. `download_odata_cdse`가
-  `.part` 임시 파일 기준으로 이어받기를 지원하므로, 에러가 나면 **같은 명령을 다시 실행**하면 됩니다.
-- 검색 대상 위성은 코드에 하드코딩되어 있지 않고 CDSE STAC 검색 결과를 그대로 따릅니다. 즉 S1A/S1C/S1D
-  중 실제로 해당 AOI·기간에 촬영 이력이 있는 위성만 후보로 나옵니다. 위성 임무 계획(태스킹) 상
-  특정 위성이 그 지역/기간에 아예 촬영을 안 했다면 코드가 아니라 실제로 데이터가 없는 것이니
-  `window_days`를 늘리거나 시간을 두고 재검색해보세요 (SLC 카탈로그 등록에는 촬영 후 지연이 있습니다).
+- [SNAPPY_GUIDE_KR.md](SNAPPY_GUIDE_KR.md) — snappy/esa_snappy 개념, 설치, 방식 A(GPF)
+  vs 방식 B(SNAPISTA/gpt), esa-snappy-master 전체 레퍼런스
+- [TERRAIN_AUX_DATA_KR.md](TERRAIN_AUX_DATA_KR.md) — HAND 개념·다운로드·활용,
+  NGII 5m DEM의 External DEM 사용법, DEM 비교 방법론

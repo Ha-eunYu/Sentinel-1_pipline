@@ -192,16 +192,51 @@ def build_rtc_graph(
     return g
 
 
+def _iter_lonlat(node):
+    """중첩된 GeoJSON coordinates 배열에서 [lon, lat] 쌍을 재귀적으로 뽑는다.
+
+    Point/LineString/Polygon/MultiPolygon 등 어떤 깊이의 좌표 구조든
+    지원하기 위해, 숫자 2개짜리 리스트를 만나면 좌표로 간주한다.
+    """
+    if (
+        isinstance(node, (list, tuple))
+        and len(node) >= 2
+        and all(isinstance(v, (int, float)) for v in node[:2])
+    ):
+        yield node[0], node[1]
+        return
+    if isinstance(node, (list, tuple)):
+        for child in node:
+            yield from _iter_lonlat(child)
+
+
 def aoi_wkt_from_geojson(geojson_path: str | Path, margin_deg: float = 0.1) -> str:
-    """AOI geojson의 bbox에 여유(margin)를 더한 WKT POLYGON 문자열 생성."""
+    """AOI geojson의 bbox에 여유(margin)를 더한 WKT POLYGON 문자열 생성.
+
+    Feature / FeatureCollection / 순수 geometry, 그리고 Polygon /
+    MultiPolygon 등 어떤 형태든 모든 좌표를 모아 bbox를 계산한다.
+    """
     import json
 
     with open(geojson_path, encoding="utf-8") as f:
         gj = json.load(f)
-    geom = gj["features"][0]["geometry"] if "features" in gj else gj.get("geometry", gj)
-    coords = geom["coordinates"][0]
-    lons = [c[0] for c in coords]
-    lats = [c[1] for c in coords]
+
+    if gj.get("type") == "FeatureCollection":
+        geoms = [f["geometry"] for f in gj.get("features", []) if f.get("geometry")]
+    elif gj.get("type") == "Feature":
+        geoms = [gj["geometry"]]
+    else:
+        geoms = [gj]
+
+    lons, lats = [], []
+    for geom in geoms:
+        for lon, lat in _iter_lonlat(geom.get("coordinates", [])):
+            lons.append(lon)
+            lats.append(lat)
+
+    if not lons:
+        raise ValueError(f"좌표를 찾을 수 없습니다: {geojson_path}")
+
     min_lon, max_lon = min(lons) - margin_deg, max(lons) + margin_deg
     min_lat, max_lat = min(lats) - margin_deg, max(lats) + margin_deg
     return (

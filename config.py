@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -32,9 +32,17 @@ def load_env(env_path: Optional[str] = None) -> None:
 
 @dataclass
 class CDSEConfig:
-    stac_url: str = os.getenv("CDSE_STAC_URL", "https://stac.dataspace.copernicus.eu/v1")
-    cdse_client_id: Optional[str] = os.getenv("CDSE_CLIENT_ID")
-    cdse_client_secret: Optional[str] = os.getenv("CDSE_CLIENT_SECRET")
+    # default_factory로 감싸서 인스턴스 생성 시점에 os.getenv를 평가한다.
+    # (모듈 import 시점에 평가하면 그 뒤 load_env(".env")로 채운 값이 반영되지 않음)
+    stac_url: str = field(
+        default_factory=lambda: os.getenv(
+            "CDSE_STAC_URL", "https://stac.dataspace.copernicus.eu/v1"
+        )
+    )
+    cdse_client_id: Optional[str] = field(default_factory=lambda: os.getenv("CDSE_CLIENT_ID"))
+    cdse_client_secret: Optional[str] = field(
+        default_factory=lambda: os.getenv("CDSE_CLIENT_SECRET")
+    )
 
 
 @dataclass

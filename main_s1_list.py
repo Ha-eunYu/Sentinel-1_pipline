@@ -185,6 +185,12 @@ def main() -> None:
 
     download_dir = out_cfg.out_dir / "sentinel1"
 
+    # 다운로드 개수 제한 (None = 후보 전부, 디스크 절약 시 정수로 제한).
+    # SLC는 1개당 5~8GB이므로 후보가 많으면 순식간에 수십 GB가 필요하다.
+    max_downloads = None
+    if max_downloads is not None:
+        selected_items = selected_items[:max_downloads]
+
     for cand in selected_items:
         try:
             out_file = download_dir / f"{cand['id']}.zip"
