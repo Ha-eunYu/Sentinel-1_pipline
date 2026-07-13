@@ -5,7 +5,9 @@ SLC scene closest to a given area of interest (AOI) and target time, then downlo
 (zip) product via the OData (zipper) API. It is currently configured for **monitoring the July
 2026 Korea flood**, targeting the Sentinel-1A/C/D satellites.
 
-(한국어 버전: [README.md](README.md))
+(한국어 버전: [README_KR.md](README_KR.md) — this English README only covers the
+search/download stage and is out of date; see the Korean README for the full pipeline,
+including RTC preprocessing, HAND, water detection, and current data status.)
 
 ## TL;DR: steps after cloning
 

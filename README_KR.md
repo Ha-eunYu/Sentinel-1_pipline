@@ -5,6 +5,8 @@ ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임
 결합으로 수체를 탐지하는 파이프라인입니다. 현재는 **2026년 7월 한국 홍수 모니터링**
 (홍수일 7/8, AOI: 충청권)을 대상으로 설정되어 있습니다.
 
+작업 진행 이력과 현재 데이터 인벤토리는 [PROGRESS_KR.md](PROGRESS_KR.md) 참고.
+
 (English version: [README_ENG.md](README_ENG.md) — 검색·다운로드 부분만 다루는 구버전)
 
 ## 파이프라인 전체 구조
@@ -124,6 +126,49 @@ downloads/                 # 실행 결과물 (git 미추적)
   water/                   # 수체 마스크 (baseline_water_union.tif 등)
 ```
 
+## 데이터 처리 현황 (2026-07-13 기준)
+
+| 구분 | 다운로드 | RTC | 비고 |
+| --- | --- | --- | --- |
+| GRD (`sentinel1_grd/`) | 14 / 14 완료 | 14 / 14 완료 | 6/25 S1A ×2, 6/26 S1C ×4, 7/1 S1C ×3, 7/2 S1D ×2, 7/3 S1C ×3 |
+| SLC (`sentinel1/`) | 14 / 14 완료 | 6 / 6 완료 | RTC는 홍수 AOI 교차 씬만 대상 — 교차하는 6개 전부 처리됨 |
+
+- **SLC RTC "실패 6건"은 정상입니다.** 나머지 SLC 8개(EBE9, 0C58, 7AB0, 65DC,
+  D560, 43D6, 8105 등)는 footprint 대조 결과 홍수 AOI(경도 126.61~127.39,
+  위도 35.91~36.72)와 **교차하지 않는** 인접/동부 swath 프레임이라 Subset 단계에서
+  의도적으로 걸러집니다. 7/3 패스 3개는 경도 127.7° 동쪽 swath라 AOI 전체를 벗어남.
+- 7/2 씬 `29B8_rtc_db.tif`가 11MB로 유독 작은 것도 정상 — 해당 프레임이 AOI 남쪽
+  끄트머리만 걸쳐 서브셋 결과가 작을 뿐입니다.
+- 홍수일(7/8) 이후 post-event 영상은 아직 없음 — 아래 "위성 운영 상황" 참고.
+
+## 위성 운영 상황과 촬영 일정 확인법
+
+### Sentinel-1A 퇴역 (2026-06-29)
+
+S1A는 **2026-06-29부로 12년 운영을 마치고 퇴역**했습니다
+([ESA 공지](https://www.esa.int/Applications/Observing_the_Earth/Copernicus/Sentinel-1/Time_to_say_goodbye_to_Sentinel-1A),
+[CDSE 공지](https://dataspace.copernicus.eu/news/2026-6-30-copernicus-sentinel-1a-satellite-end-operations-after-12-years-service)).
+6/25 S1A 씬이 이 지역 마지막 S1A 촬영이며, 이후 constellation은 **S1C + S1D 2기**
+체제입니다. 퇴역 전후 S1C/S1D 궤도 재배치·관측계획 재편이 진행 중이라 이 시기에는
+**위성당 12일 반복주기가 매 주기 보장되지 않습니다** (예: 7/7 S1A 반복은 퇴역으로,
+7/8 S1C 반복은 관측계획 공백으로 미촬영 — 계획 KML에서 21:15~21:37 UTC datatake
+공백 확인됨).
+
+### 촬영 계획(acquisition plan) 확인법
+
+카탈로그에 없다고 촬영 실패가 아니라, 애초에 계획에 없었을 수 있습니다. 확정
+일정은 ESA가 공개하는 계획 KML로 확인합니다:
+
+1. <https://sentinels.copernicus.eu/copernicus/sentinel-1/acquisition-plans> 에서
+   위성별(S1C/S1D) KML 다운로드 (파일명이 계획 기간: `s1c_mp_user_<시작>_<끝>`)
+2. KML의 `<Placemark>`에서 한국 통과 예상 시각(UTC) 주변의 `<begin>/<end>`와
+   `<coordinates>` 폴리곤이 한반도(경도 125~130, 위도 33~39)와 겹치는지 확인
+3. 촬영 후 카탈로그 등록까지 보통 3~6시간 소요
+
+참고 — 계획 KML로 확인된 다음 AOI 커버 촬영: **7/13 21:28~21:40 UTC S1C**(하강),
+**7/14 09:30~09:31 UTC S1D**(상승, 폴리곤이 홍수 AOI 정확히 커버). 이것이 최초의
+post-event 영상이 될 예정입니다.
+
 ## 설정 포인트
 
 ### AOI (관심 지역)
@@ -171,7 +216,9 @@ downloads/                 # 실행 결과물 (git 미추적)
   이어받기와 토큰 자동 재발급으로 이어집니다.
 - SLC 카탈로그 등록에는 촬영 후 수 시간~하루 지연이 있고, **촬영 계획에 없던
   지역은 아예 올라오지 않습니다** (같은 궤도의 다른 구간만 공개돼 있다면 그
-  지역은 촬영이 안 된 것). Sentinel-1 반복 주기는 위성당 12일입니다.
+  지역은 촬영이 안 된 것). Sentinel-1 반복 주기는 위성당 12일이지만 매 주기
+  촬영이 보장되지 않으므로, 위의 "위성 운영 상황과 촬영 일정 확인법" 절차로
+  계획 KML을 먼저 확인하세요.
 - Windows에서 첫 실행 시 SNAP이 궤도 파일과 DEM 타일을
   `C:\Users\<user>\.snap\auxdata\`에 내려받으므로 첫 씬 처리가 더 오래 걸립니다.
 
