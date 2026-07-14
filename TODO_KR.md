@@ -1,4 +1,4 @@
-# TODO (2026-07-14 기준)
+# TODO (2026-07-14 갱신)
 
 다른 컴퓨터에서 이어서 작업할 때 참고하는 실행 목록. 배경·근거는
 [CODE_REVIEW_KR.md](CODE_REVIEW_KR.md)(코드 품질)와 [PROGRESS_KR.md](PROGRESS_KR.md)
@@ -13,28 +13,31 @@
 - [ ] **S3 access/secret key 재발급**. 같은 `.env`에 `CDSE_S3_ACCESS_KEY`,
       `CDSE_S3_SECRET_KEY`도 있었습니다. 발급받은 콘솔에서 폐기 후 재발급.
 - [ ] 두 값을 로컬 `.env`(현재 이 컴퓨터)와, 다른 컴퓨터로 옮길 경우 그쪽 `.env`에도 갱신.
+- [ ] **(신규, 7/14) `.env` 재발급 시 반드시 백업해둘 것**: 오늘 `git filter-repo`
+      실행 중 로컬 `.env`가 통째로 삭제되는 사고가 있었음(아래 P4 참고). 지금
+      만드는 새 `.env`는 프로젝트 밖(예: 비밀번호 관리자, 클라우드 노트)에도
+      한 부 저장해두면 같은 사고가 나도 git 작업만으로 복구 가능.
 
-## P1 — post-event 영상이 올라오는 대로 (외부 요인, 대기 중)
+## P1 — post-event 영상 (진행 중)
 
-- [ ] 촬영 계획 KML로 확인된 다음 두 패스가 홍수 AOI를 커버합니다. 카탈로그
-      등록(보통 촬영 후 3~6시간, 관측된 사례로는 최대 4시간 이상도 있었음) 여부를
-      확인 후 진행:
-  - S1C 하강, 2026-07-13 21:39~21:40 UTC(KST 7/14 06:39경) — 7/14 오전 확인 시점에
-    아직 카탈로그 미등록이었음(같은 datatake의 시베리아 구간은 이미 등록됨, 한국
-    구간만 지연). 재확인 필요.
-  - S1D 상승, 2026-07-14 09:30~09:31 UTC(KST 18:30경) — 아직 촬영 전이었음(7/14
-    오전 기준).
-  - 확인 방법: CDSE STAC `https://stac.dataspace.copernicus.eu/v1/search`에
-    `collections: sentinel-1-grd`(또는 slc), `intersects: South_Korea.geojson`,
-    최근 `datetime` 범위로 POST — 또는 그냥
-    `conda run -n s1_pipeline python main_s1_list_grd.py` /
-    `main_s1_list.py` 재실행(기존 파일은 자동 스킵되므로 안전).
-- [ ] post-event GRD/SLC 다운로드 후 RTC 배치 재실행:
-  ```
-  conda run -n s1_snappy python batch_grd_rtc.py
-  conda run -n s1_snappy python batch_slc_rtc.py
-  conda run -n s1_snappy python build_rtc_mosaic.py
-  ```
+- [x] **S1C 하강 패스(2026-07-13 21:39~21:40 UTC, KST 7/14 06:39경) 카탈로그
+      게시 확인** — 홍수일(7/8) 이후 최초 post-event 영상. 촬영→게시까지 실측
+      약 4시간 걸림(오전 10:13 KST 확인 때는 게시 전이라 놓쳤었음, 10:43 게시).
+- [x] **post-event GRD 다운로드 완료** (7/14 14:05~14:08) — 3개 신규:
+      `93FC`/`3C22`/`1A5A` (`sentinel1_grd/`에 있음, 이 중 `3C22`·`1A5A`가 홍수
+      AOI와 직접 겹침).
+- [ ] **post-event GRD RTC 진행 중** (7/14 14:08~) — `batch_grd_rtc.py` 백그라운드
+      실행 중. AOI 서브셋 없는 전체 씬 처리라 씬당 평균 45분(과거 11~88분 편차)
+      예상, 3개면 대략 1.5~4시간. 완료 확인:
+      `ls downloads/rtc_grd/*93FC*_rtc_db.tif downloads/rtc_grd/*3C22*_rtc_db.tif
+      downloads/rtc_grd/*1A5A*_rtc_db.tif` 3개 다 있으면 완료.
+- [ ] 완료되면 모자이크 갱신: `conda run -n s1_snappy python build_rtc_mosaic.py
+      20260713`
+- [ ] **post-event SLC는 보류 중** (사용자가 "다음에 하겠습니다"로 명시적으로
+      미룸). 재개 시 대응 씬 ID: `S1C_IW_SLC__1SDV_20260713T213913..._41E9`,
+      `..._213938..._64C0`, `..._214004..._04E2`. `conda run -n s1_pipeline
+      python main_s1_list.py` (기존 파일은 자동 스킵) →
+      `conda run -n s1_snappy python batch_slc_rtc.py`.
 
 ## P2 — detect_flood.py 구현 (핵심 목표, post 영상 확보 후 착수)
 
@@ -67,6 +70,12 @@
 
 ## P4 — 이식성 (다른 컴퓨터로 옮길 계획이 있다면 우선순위 높음)
 
+- [ ] **(7/14 사고 기록)** `git filter-repo --invert-paths --path .env` 실행 중
+      로컬 `.env`가 디스크에서도 삭제됨 — `.gitignore`에 있어도 "추적되던 파일"이
+      히스토리 재작성으로 트리에서 사라지면 작업 트리 정리 과정에서 함께 지워짐.
+      reflog도 filter-repo가 즉시 만료시켜 git으로 복구 불가했음. **앞으로 히스토리
+      재작성(filter-repo, rebase, reset --hard 등) 전에는 `.env`류를 프로젝트 밖으로
+      먼저 복사해둘 것.**
 - [ ] `prepro_gpt.py:41`, `prepro_grd_gpt.py:36` — `SNAP_BIN = r"C:\Program
       Files\snap\bin"` 하드코딩. 다른 PC는 SNAP 설치 경로가 다를 수 있으므로
       `.env`의 `SNAP_BIN`으로 이동.
