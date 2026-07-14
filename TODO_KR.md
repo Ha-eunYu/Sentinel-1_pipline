@@ -26,13 +26,18 @@
 - [x] **post-event GRD 다운로드 완료** (7/14 14:05~14:08) — 3개 신규:
       `93FC`/`3C22`/`1A5A` (`sentinel1_grd/`에 있음, 이 중 `3C22`·`1A5A`가 홍수
       AOI와 직접 겹침).
-- [ ] **post-event GRD RTC 진행 중** (7/14 14:08~) — `batch_grd_rtc.py` 백그라운드
-      실행 중. AOI 서브셋 없는 전체 씬 처리라 씬당 평균 45분(과거 11~88분 편차)
-      예상, 3개면 대략 1.5~4시간. 완료 확인:
-      `ls downloads/rtc_grd/*93FC*_rtc_db.tif downloads/rtc_grd/*3C22*_rtc_db.tif
-      downloads/rtc_grd/*1A5A*_rtc_db.tif` 3개 다 있으면 완료.
-- [ ] 완료되면 모자이크 갱신: `conda run -n s1_snappy python build_rtc_mosaic.py
-      20260713`
+- [x] **post-event GRD RTC 완료** (7/14 14:08~15:54) — `93FC`(북한, AOI 무관)
+      69.4분, `3C22`(AOI 겹침) 25.8분, `1A5A`(AOI 겹침) 10.5분. 뒤 두 개가 훨씬
+      빠른 이유: 인접 pre-event 씬 처리 때 이미 Copernicus 30m DEM 타일이
+      캐시돼 있었기 때문(93FC는 처음 다루는 위도대라 DEM을 새로 받음).
+- [x] 모자이크 생성 — **단, `build_rtc_mosaic.py`가 아니라 `gdalbuildvrt`를
+      직접 실행**했습니다. 이 스크립트는 `downloads/rtc`(SLC)만 읽도록
+      하드코딩돼 있어 GRD(`downloads/rtc_grd`)는 지원하지 않기 때문
+      (P5 항목 참고 — `--dir` 옵션 추가하면 스크립트로도 가능해짐). 대신
+      P3의 NoData 버그 수정(`-srcnodata 0 -vrtnodata 0`)은 이번 명령에 반영
+      해뒀습니다. 결과: `downloads/rtc_grd/s1_rtc_db_mosaic_20260713.vrt`
+      (93FC 포함 3개 전부). 3C22·1A5A만 다시 묶고 싶으면 같은 명령에서
+      93FC만 빼고 재실행.
 - [ ] **post-event SLC는 보류 중** (사용자가 "다음에 하겠습니다"로 명시적으로
       미룸). 재개 시 대응 씬 ID: `S1C_IW_SLC__1SDV_20260713T213913..._41E9`,
       `..._213938..._64C0`, `..._214004..._04E2`. `conda run -n s1_pipeline
@@ -61,7 +66,9 @@
 - [ ] `build_rtc_mosaic.py:62` — `gdalbuildvrt`에 `-srcnodata 0 -vrtnodata 0` 추가.
       현재 프레임 겹침 구간에서 위 프레임의 빈 영역(0)이 아래 프레임의 유효 dB를
       덮어써 baseline 커버리지가 실제보다 줄어드는 버그. 수정 후
-      **기존 VRT·baseline 재생성 필요**.
+      **기존 VRT·baseline 재생성 필요**. (7/14, GRD post-event 모자이크는
+      `gdalbuildvrt`를 직접 실행하면서 이 옵션을 수동으로 넣었지만, 스크립트
+      본체는 아직 안 고쳐서 SLC 쪽 기존 VRT 4개는 여전히 버그 있는 상태.)
 - [ ] `download_hand.py:83-91` — HAND 타일 다운로드에 `.part` 임시파일 +
       Content-Length 검증 추가 (`stac/download_s1.py` 패턴 재사용). 현재는
       중간에 끊긴 손상 타일이 재실행 시 "이미 있음"으로 조용히 통과됨.
@@ -107,7 +114,11 @@
 - [ ] 정리 대상 파일: `downloads/rtc_grd`의 DEM 비교 실험 산출물(`*_dem_diff.tif`
       등 4개) → `experiments/` 하위로, 2022 Jeddah SLC(11GB) → 별도 보관,
       `output_partitioned_stac/`(출처 불명, 524KB) → 문서화 또는 삭제,
-      `downloads/s1_frames_report_GRD.geojson`+`.qmd` → 구버전 잔재, 삭제 권장.
+      `downloads/s1_frames_report_GRD.qmd` → 구버전 잔재, 삭제 권장
+      (`s1_frames_report_GRD.geojson`은 7/14에 재생성해서 최신 상태 — 삭제 대상
+      아님, 다만 export_frames_geojson.py에는 아직 GRD 전용 옵션이 없어 별도
+      스크립트로 만듦. `export_frames_geojson.py`에 `--product grd|slc|all`
+      옵션을 추가하면 이 별도 스크립트가 필요 없어짐).
 - [ ] 최소 단위 테스트 추가: `stac/models.py`의 `parse_target_datetime_utc`,
       `make_datetime_range`; `stac/search_s1.py`의 `extract_product_id`;
       `prepro_gpt.py`의 `_iter_lonlat`/`aoi_wkt_from_geojson`.
@@ -121,3 +132,5 @@
 - [x] HAND 다운로드, NGII DEM 클립, pre-event baseline 수체 지도
 - [x] `.env` git 히스토리 세척 + force push (단, 비밀번호/키 자체 변경은 P0 참고)
 - [x] git upstream 추적 연결(`git branch --set-upstream-to=origin/main main`)
+- [x] post-event GRD 다운로드 + RTC + 모자이크 (3/3, 7/14 완료)
+- [x] `s1_frames_report_GRD.geojson` 재생성 (7/14, 17개 프레임 반영)

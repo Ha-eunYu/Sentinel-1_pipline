@@ -13,10 +13,9 @@
 | SLC 검색·다운로드 (14씬) | ✅ 완료 (7/13 EBE9 마지막 완료) |
 | SLC RTC (AOI 교차 6씬) | ✅ 완료 — 나머지 8씬은 AOI 미교차로 대상 아님 |
 | HAND / NGII DEM / 기준 수체 지도 | ✅ 완료 |
-| post-event GRD (7/13 밤 S1C, 3씬) | 🔄 다운로드 완료, RTC 진행 중 |
-| post-event GRD RTC 모자이크·baseline 갱신 | ⬜ RTC 완료 후 |
+| post-event GRD (7/13 밤 S1C, 3씬) | ✅ 다운로드·RTC·모자이크 완료 |
 | post-event SLC | ⬜ 보류 (사용자 요청으로 이번엔 건너뜀, "다음에 하겠습니다") |
-| 신규 침수 탐지 (`detect_flood.py`) | ⬜ 미착수 — post GRD RTC 완료 후 착수 가능 |
+| 신규 침수 탐지 (`detect_flood.py`) | ⬜ 미착수 — 착수 가능 상태 (baseline은 SLC 기준이라 GRD로 하려면 GRD baseline도 필요) |
 
 ## 데이터 인벤토리 (`downloads/`)
 
@@ -25,8 +24,9 @@
 - `sentinel1_grd/` — GRD(COG) 원본 17개: pre-event 14개(6/25 ×2, 6/26 ×4, 7/1 ×3,
   7/2 ×2, 7/3 ×3) + **post-event 3개(7/13 21:39~21:40 UTC S1C, 신규)**
 - `rtc/` — SLC RTC dB 6개 + 날짜별 모자이크 VRT (0625/0626/0701/0702)
-- `rtc_grd/` — GRD RTC dB pre-event 14개 + NGII/Copernicus DEM 비교 실험
-  산출물(5469 씬) + **post-event 3개 처리 중(7/14)**
+- `rtc_grd/` — GRD RTC dB pre-event 14개 + post-event 3개(7/14 완료) + NGII/
+  Copernicus DEM 비교 실험 산출물(5469 씬) + `s1_rtc_db_mosaic_20260713.vrt`
+  (post-event 모자이크, `gdalbuildvrt` 직접 실행으로 생성 — 아래 7/14 항목 참고)
 - `hand/` — GLO-30 HAND 타일 4장(N35–36/E126–127) + `hand_aoi.vrt`
 - `dem/` — NGII 5m DEM AOI 클립 (`ngii_5m_aoi.tif`)
 - `water/` — 날짜별 수체 마스크 4개(0625/0626/0701/0702), `baseline_water_union.tif`,
@@ -99,26 +99,43 @@
      촬영(21:39:40 UTC) → 처리완료(23:40:13 UTC, +2h) → 게시(익일 01:43:30 UTC,
      **촬영 후 약 4시간**). 오전 10:13 KST 확인 때는 아직 게시 전(게시는 10:43
      KST)이라 놓쳤던 것으로 확인 — 지연이나 버그가 아니라 확인 타이밍 문제였음.
-4. **post-event GRD 다운로드 + RTC 진행**: 사용자 요청으로 GRD만 우선 진행(SLC는
-   보류). `main_s1_list_grd.py` 재실행 → 3개 다운로드 완료(14:05~14:08). 이어서
-   `batch_grd_rtc.py` 실행 — **전체 씬(AOI 서브셋 없음) 처리라 씬당 평균 45분
-   (과거 14씬 완료 타임스탬프 기준 11~88분 편차) 예상**, 3개 배치 진행 중(14:08
-   시작, 아직 완료 안 됨).
+4. **post-event GRD 다운로드 + RTC + 모자이크 완료**: 사용자 요청으로 GRD만
+   우선 진행(SLC는 보류). `main_s1_list_grd.py` 재실행 → 3개 다운로드
+   완료(14:05~14:08). `batch_grd_rtc.py` 실행 결과(씬당 소요시간, 완료 타임
+   스탬프 기준):
+   - `93FC`(북한, AOI 무관) 69.4분 — 이 위도대는 처음 처리하는 거라 Copernicus
+     30m DEM 타일을 새로 받느라 오래 걸림
+   - `3C22`(AOI 겹침) 25.8분, `1A5A`(AOI 겹침) 10.5분 — 인접 pre-event 씬
+     처리 때 이미 DEM이 캐시돼 있어서 훨씬 빠름
+   - 모자이크는 `build_rtc_mosaic.py`가 GRD를 지원하지 않아(`downloads/rtc`
+     SLC 전용 하드코딩) **`gdalbuildvrt`를 직접 실행**해서 생성, 이때 CODE_REVIEW
+     P1-1(VRT NoData 미지정 버그)의 수정(`-srcnodata 0 -vrtnodata 0`)을 반영함
+     → `downloads/rtc_grd/s1_rtc_db_mosaic_20260713.vrt`
+5. **93FC(북한) footprint의 과거 촬영 이력 조회**: 사용자가 "93FC 이전 영상"을
+   요청해 STAC 조회 — 같은 relative orbit이 5월부터 12일 주기로 반복 촬영됨을
+   확인. 그중 **7/1 씬(0FEB)이 이미 이 프로젝트에서 RTC까지 처리돼 있어**,
+   원하면 93FC와 바로 전/후 비교 가능(단, 현재 프로젝트 범위 밖이라 보류).
+6. **`s1_frames_report_GRD.geojson` 재생성**: `export_frames_geojson.py`가
+   SLC+GRD 통합본만 만들도록 돼 있어(GRD 단독 옵션 없음), 그 함수들을 재사용하는
+   일회성 스크립트로 GRD 17개 프레임 전체를 반영해 재생성. `downloads/`에 저장.
+7. **RAM 증설 요청 근거 문서 작성**: 홍수 파이프라인과는 무관한 별도 요청 —
+   `f:\06_SAR_system\S1\RAM_증설_요청_근거.md`. 오늘 GRD RTC 처리 중 실측한
+   리소스 수치(RAM 32GB 중 씬 1개가 18.49GB 단독 사용, 여유 RAM 3.7GB까지 감소,
+   CPU는 8스레드로 이미 최대 활용 중 등) 근거로 정리. git에는 미포함(개인 문서).
 
 ## 다음 할 일
 
-1. **post-event GRD RTC 완료 대기** — `batch_grd_rtc.py` 배치가 끝나면
-   `build_rtc_mosaic.py 20260713`로 날짜별 모자이크 생성.
-2. **post-event SLC**는 사용자가 "다음에 하겠습니다"로 보류함 — 필요 시
+1. **post-event SLC**는 사용자가 "다음에 하겠습니다"로 보류함 — 필요 시
    `main_s1_list.py` 재실행(41E9/64C0/04E2 등 신규만 받아짐) 후
    `batch_slc_rtc.py`.
-3. `build_baseline_water.py`는 pre-event(baseline)만 다루므로 그대로 두고,
+2. `build_baseline_water.py`는 pre-event(baseline)만 다루므로 그대로 두고,
    **`detect_flood.py`를 새로 작성**해 post-event 모자이크 vs baseline 비교:
    post 수체(dB < -16 AND HAND < 10m) − `baseline_water_union.tif` = 신규 침수.
-   `build_baseline_water.py`의 격자·마스킹 로직 재사용.
-4. (선택) 매니페스트가 top-k만 기록하는 문제 — 다운로드 대상 전체를 기록하도록
+   `build_baseline_water.py`의 격자·마스킹 로직 재사용. (GRD 기준으로 하려면
+   GRD용 baseline도 새로 만들어야 함 — 지금 baseline은 SLC 모자이크 기준.)
+3. (선택) 매니페스트가 top-k만 기록하는 문제 — 다운로드 대상 전체를 기록하도록
    `main_s1_list*.py` 개선하면 이번 EBE9처럼 URL을 다시 조회할 필요가 없어짐.
-5. (선택) `README_ENG.md` 전체 동기화 (현재는 검색·다운로드 단계만 다루는 구버전).
+4. (선택) `README_ENG.md` 전체 동기화 (현재는 검색·다운로드 단계만 다루는 구버전).
 
 ## 주의/메모
 
