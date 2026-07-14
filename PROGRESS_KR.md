@@ -30,8 +30,11 @@
 - `hand/` — GLO-30 HAND 타일: 홍수 AOI용 4장(N35–36/E126–127) + `hand_aoi.vrt`,
   **북한 동일궤도 스와스용 22장(N34–39/E123–127, 7/14 추가) + `hand_north_orbit.vrt`**
 - `dem/` — NGII 5m DEM AOI 클립 (`ngii_5m_aoi.tif`)
-- `water/` — 날짜별 수체 마스크 4개(0625/0626/0701/0702), `baseline_water_union.tif`,
-  `water_frequency.tif`, `observed_count.tif`
+- `water/` — SLC 기준: 날짜별 마스크 4개(0625/0626/0701/0702),
+  `baseline_water_union.tif`, `water_frequency.tif`, `observed_count.tif`.
+  **GRD 기준(7/14 추가)**: `*_water_mask_grd.tif` ×5, `baseline_water_union_grd.tif`,
+  `water_frequency_grd.tif`, `observed_count_grd.tif` (홍수 AOI, dB+HAND 합집합),
+  `baseline_water_latest_grd.tif` (남한 전역, dB만·최신 관측 우선)
 - 매니페스트: `s1_stac_list_manifest.json`(SLC), `s1_stac_list_manifest_grd.json`(GRD)
   — 구버전이라 top-k 후보만 기록되어 실제 다운로드 목록과 일부 차이 있음
 - 프레임 현황: `s1_frames_report.geojson` / `s1_frames_report_GRD.geojson` (QGIS용)
@@ -143,6 +146,21 @@
    34.89~39.92)를 커버하는 타일 30개 후보 중 **22개 다운로드**(8개는 서해
    바다라 HTTP 404) → `downloads/hand/hand_north_orbit.vrt`. 기존
    `hand_aoi.vrt`(홍수 AOI용)는 건드리지 않음.
+10. **GRD 날짜 모자이크 5종 + GRD 기준 baseline 생성**
+    (`build_baseline_water_grd.py` 신규): pre-event 5개 날짜(6/25~7/3) GRD
+    모자이크를 만들고(NoData 옵션 반영), SLC baseline과 같은 로직(dB<-16 AND
+    HAND<10m, 합집합)을 홍수 AOI에 적용. 산출물은 `_grd` 접미사로 분리.
+    결과: baseline 합집합 277.60 km², 상시 수체 131.19 km². 7/3은 AOI 밖
+    (동부 swath)이라 커버리지 0%로 기여 없음 — 실질 4개 날짜.
+11. **남한 전역 "최신 관측 우선" baseline 생성**
+    (`build_baseline_latest_grd.py` 신규, 사용자 요청 사양): 대상을 South_Korea
+    bbox(+0.1도)로 확장, **HAND 미사용(dB<-16 단독)**, 중첩 구간은 합집합이
+    아니라 **가장 최근 촬영 픽셀 우선**(날짜 오름차순 gdalbuildvrt 합성 →
+    `rtc_grd/s1_rtc_db_composite_latest_pre.vrt`, 나중 파일이 이기는 성질 이용).
+    남한 전역에서는 7/3 동부 swath도 동해안에 실제 기여. 약 35,900×48,400px를
+    블록 단위로 처리. 결과: 커버리지 79.7%, 수체 판정 1,869 km²(**바다·그림자
+    오탐 포함 값** — 육지 통계는 South_Korea 폴리곤 클립 후 재계산 필요).
+    산출물: `water/baseline_water_latest_grd.tif`.
 
 ## 다음 할 일
 

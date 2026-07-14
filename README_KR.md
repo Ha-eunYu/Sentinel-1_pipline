@@ -29,7 +29,9 @@ ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임
     compare_dem_rtc.py   Copernicus 30m vs NGII 5m RTC 품질 비교 실험
 
 [4] 수체 탐지
-    build_baseline_water.py   pre-event 시계열 -> 기준(평상시) 수체 지도
+    build_baseline_water.py       pre-event 시계열 -> 기준 수체 지도 (SLC, dB+HAND, 합집합)
+    build_baseline_water_grd.py   GRD 버전 (dB+HAND, 합집합, 홍수 AOI)
+    build_baseline_latest_grd.py  GRD 남한 전역, dB만(HAND 미사용), 최신 관측 우선
     (detect_flood.py 예정: post 영상 확보 후 신규 침수 = post 수체 - baseline)
 
 [보고] export_frames_geojson.py  프레임 현황 GeoJSON (QGIS)

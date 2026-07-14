@@ -63,11 +63,13 @@
 
 - [ ] `detect_flood.py` 신규 작성. `build_baseline_water.py`의 `build_target_grid`,
       `reproject_to_grid`, dB+HAND 판정 로직을 재사용:
-  ```
+
+  ```text
   post 수체 후보 = (post dB < -16) AND (HAND < 10m)
   신규 침수     = post 수체 후보 AND (baseline_water_union == 0)
   판정불가      = baseline_water_union == 255 인 픽셀
   ```
+
 - [ ] 산출물: `flood_class.tif` (0=비침수, 1=신규침수, 2=기존수체, 255=판정불가) +
       면적 통계 JSON.
 - [ ] `260709_침수피해현황_v2.kmz`(저장소에 이미 있음, 공식 피해 현황)와 대조해
@@ -149,3 +151,7 @@
 - [x] git upstream 추적 연결(`git branch --set-upstream-to=origin/main main`)
 - [x] post-event GRD 다운로드 + RTC + 모자이크 (3/3, 7/14 완료)
 - [x] `s1_frames_report_GRD.geojson` 재생성 (7/14, 17개 프레임 반영)
+- [x] GRD pre-event 날짜 모자이크 5종 + GRD baseline (`build_baseline_water_grd.py`,
+      홍수 AOI, dB+HAND 합집합 — 7/14)
+- [x] 남한 전역 최신관측 baseline (`build_baseline_latest_grd.py`, dB만·HAND 미사용·
+      최근 영상 우선 — 7/14). detect_flood에서 post GRD와 비교할 기준 완비.
