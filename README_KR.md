@@ -5,7 +5,9 @@ ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임
 결합으로 수체를 탐지하는 파이프라인입니다. 현재는 **2026년 7월 한국 홍수 모니터링**
 (홍수일 7/8, AOI: 충청권)을 대상으로 설정되어 있습니다.
 
-작업 진행 이력과 현재 데이터 인벤토리는 [PROGRESS_KR.md](PROGRESS_KR.md) 참고.
+작업 진행 이력과 현재 데이터 인벤토리는 [PROGRESS_KR.md](PROGRESS_KR.md),
+코드 품질 리뷰는 [CODE_REVIEW_KR.md](CODE_REVIEW_KR.md), 다음 할 일 체크리스트는
+[TODO_KR.md](TODO_KR.md) 참고.
 
 (English version: [README_ENG.md](README_ENG.md) — 검색·다운로드 부분만 다루는 구버전)
 
