@@ -44,6 +44,21 @@
       python main_s1_list.py` (기존 파일은 자동 스킵) →
       `conda run -n s1_snappy python batch_slc_rtc.py`.
 
+## P1.5 — 탐색적 분석: 북한 동일궤도(범위 밖, 필요 시에만)
+
+93FC(7/13, 북한) footprint가 12일 주기 반복궤도라 7/1 씬(0FEB 등)과 바로 전/후
+비교가 가능하다는 걸 발견해서 만들어둔 산출물들. **현재 프로젝트 핵심 범위
+(충청권 홍수)는 아니므로 급하지 않음.**
+
+- [x] 7/1·7/13 동일궤도 3프레임씩 날짜 모자이크 + 2밴드 스택 VRT + dB 차분
+      계산 완료 (`downloads/rtc_grd/s1_rtc_db_diff_0701_vs_0713.tif`) — 평균
+      +0.52dB, -3dB 이상 어두워진 픽셀 4.4%.
+- [x] 같은 영역 HAND 22타일 다운로드 완료 (`downloads/hand/hand_north_orbit.vrt`).
+- [ ] **차분 + HAND 결합해서 4.4%가 진짜 수체 변화인지 그림자/노이즈인지
+      가려내기** — `build_baseline_water.py`의 `(dB 임계값) AND (HAND 임계값)`
+      로직을 이 두 산출물에 재사용하면 됨. 다만 이건 baseline 4개 날짜 합집합이
+      아니라 pre/post 각 1개 날짜 비교라 신뢰도는 낮음(스펙클 노이즈 영향 큼).
+
 ## P2 — detect_flood.py 구현 (핵심 목표, post 영상 확보 후 착수)
 
 - [ ] `detect_flood.py` 신규 작성. `build_baseline_water.py`의 `build_target_grid`,

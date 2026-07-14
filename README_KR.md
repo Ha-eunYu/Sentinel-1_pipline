@@ -123,7 +123,8 @@ downloads/                 # 실행 결과물 (git 미추적)
   sentinel1_grd/*.zip      # GRD 원본 (COG SAFE, 씬ID가 _COG로 끝남)
   rtc/                     # SLC RTC dB + 날짜별 모자이크 VRT
   rtc_grd/                 # GRD RTC dB (+ DEM 비교 실험 산출물)
-  hand/                    # HAND 타일 + hand_aoi.vrt
+  hand/                    # HAND 타일 + hand_aoi.vrt (홍수 AOI용).
+                            # hand_north_orbit.vrt는 별도 탐색적 분석용(PROGRESS_KR.md 참고)
   dem/                     # NGII DEM AOI 클립
   water/                   # 수체 마스크 (baseline_water_union.tif 등)
 ```

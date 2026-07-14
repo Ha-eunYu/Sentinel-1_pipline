@@ -27,7 +27,8 @@
 - `rtc_grd/` — GRD RTC dB pre-event 14개 + post-event 3개(7/14 완료) + NGII/
   Copernicus DEM 비교 실험 산출물(5469 씬) + `s1_rtc_db_mosaic_20260713.vrt`
   (post-event 모자이크, `gdalbuildvrt` 직접 실행으로 생성 — 아래 7/14 항목 참고)
-- `hand/` — GLO-30 HAND 타일 4장(N35–36/E126–127) + `hand_aoi.vrt`
+- `hand/` — GLO-30 HAND 타일: 홍수 AOI용 4장(N35–36/E126–127) + `hand_aoi.vrt`,
+  **북한 동일궤도 스와스용 22장(N34–39/E123–127, 7/14 추가) + `hand_north_orbit.vrt`**
 - `dem/` — NGII 5m DEM AOI 클립 (`ngii_5m_aoi.tif`)
 - `water/` — 날짜별 수체 마스크 4개(0625/0626/0701/0702), `baseline_water_union.tif`,
   `water_frequency.tif`, `observed_count.tif`
@@ -122,20 +123,45 @@
    `f:\06_SAR_system\S1\RAM_증설_요청_근거.md`. 오늘 GRD RTC 처리 중 실측한
    리소스 수치(RAM 32GB 중 씬 1개가 18.49GB 단독 사용, 여유 RAM 3.7GB까지 감소,
    CPU는 8스레드로 이미 최대 활용 중 등) 근거로 정리. git에는 미포함(개인 문서).
+8. **동일궤도(93FC 위치) 전/후 비교 VRT 3종 생성**: 사용자 요청으로 7/1(pre,
+   0FEB/EC8B/8E98)과 7/13(post, 93FC/3C22/1A5A) 같은 relative orbit 프레임을
+   비교용으로 묶음.
+   - `downloads/rtc_grd/s1_rtc_db_mosaic_20260701_sameorbit.vrt` — 7/1 세 프레임
+     날짜 모자이크 (신규 생성, `build_rtc_mosaic.py`가 GRD 미지원이라 이번에도
+     `gdalbuildvrt` 직접 실행 + NoData 옵션 반영)
+   - `s1_rtc_db_same_orbit_0701_vs_0713.vrt` — 위 7/1 모자이크와 기존 7/13
+     모자이크를 밴드 1(pre)·밴드 2(post)로 쌓은 2밴드 VRT (`-separate`)
+   - `s1_rtc_db_diff_0701_vs_0713.tif` — 밴드2−밴드1 dB 차분 (rasterio 스크립트,
+     2.4GB). **결과**: 유효 픽셀 약 6.67억 개, 평균 +0.52dB(표준편차 2.21dB,
+     노이즈 수준), **-3dB 이상 어두워진 픽셀 4.4%** — 국지적 수체 증가
+     가능성이 있으나 이 지역엔 HAND가 없어 레이더 그림자 등 오탐과 구분 불가
+     (첫 시도에서 `profile`을 VRT에서 그대로 복사해 driver가 GTiff로 안 바뀌는
+     버그로 한 번 실패, `driver="GTiff"` 명시로 수정 후 성공).
+9. **북한 동일궤도 스와스 HAND 다운로드**: 위 4.4% 판정을 검증하기 위해
+   `download_hand.py`와 같은 로직(`.part`+Content-Length 검증 포함)의 일회성
+   스크립트로 93FC/3C22/1A5A 합친 bbox(+0.1도, lon 123.64~127.76, lat
+   34.89~39.92)를 커버하는 타일 30개 후보 중 **22개 다운로드**(8개는 서해
+   바다라 HTTP 404) → `downloads/hand/hand_north_orbit.vrt`. 기존
+   `hand_aoi.vrt`(홍수 AOI용)는 건드리지 않음.
 
 ## 다음 할 일
 
-1. **post-event SLC**는 사용자가 "다음에 하겠습니다"로 보류함 — 필요 시
+1. **북한 동일궤도 4.4% 어두워짐 판정 마무리**: `hand_north_orbit.vrt`가
+   생겼으니 `s1_rtc_db_diff_0701_vs_0713.tif`와 결합해
+   (dB 어두워짐 AND HAND 낮음)로 오탐(그림자 등) 걸러내면 실제 변화 면적을
+   추정할 수 있음. `build_baseline_water.py`의 판정 로직을 이 영역에 맞게
+   재사용 가능. (현재 프로젝트 핵심 범위 밖이므로 필요 시에만.)
+2. **post-event SLC**는 사용자가 "다음에 하겠습니다"로 보류함 — 필요 시
    `main_s1_list.py` 재실행(41E9/64C0/04E2 등 신규만 받아짐) 후
    `batch_slc_rtc.py`.
-2. `build_baseline_water.py`는 pre-event(baseline)만 다루므로 그대로 두고,
+3. `build_baseline_water.py`는 pre-event(baseline)만 다루므로 그대로 두고,
    **`detect_flood.py`를 새로 작성**해 post-event 모자이크 vs baseline 비교:
    post 수체(dB < -16 AND HAND < 10m) − `baseline_water_union.tif` = 신규 침수.
    `build_baseline_water.py`의 격자·마스킹 로직 재사용. (GRD 기준으로 하려면
    GRD용 baseline도 새로 만들어야 함 — 지금 baseline은 SLC 모자이크 기준.)
-3. (선택) 매니페스트가 top-k만 기록하는 문제 — 다운로드 대상 전체를 기록하도록
+4. (선택) 매니페스트가 top-k만 기록하는 문제 — 다운로드 대상 전체를 기록하도록
    `main_s1_list*.py` 개선하면 이번 EBE9처럼 URL을 다시 조회할 필요가 없어짐.
-4. (선택) `README_ENG.md` 전체 동기화 (현재는 검색·다운로드 단계만 다루는 구버전).
+5. (선택) `README_ENG.md` 전체 동기화 (현재는 검색·다운로드 단계만 다루는 구버전).
 
 ## 주의/메모
 
