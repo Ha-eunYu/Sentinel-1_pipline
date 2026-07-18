@@ -146,7 +146,8 @@ def main() -> None:
 
     for sensor, date_str in targets:
         print(f"\n=== {sensor} | target={date_str} | collection={cfg.collection} ===")
-        res = list_s1_items_for_date(client, date_str, cfg, k=10)
+        res = list_s1_items_for_date(client, date_str, cfg, k=cfg.max_items)
+        # res = list_s1_items_for_date(client, date_str, cfg, k=10)
         results["targets"].append({"sensor": sensor, **res})
 
         if res["status"] != "ok":

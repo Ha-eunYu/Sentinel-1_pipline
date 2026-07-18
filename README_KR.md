@@ -70,6 +70,10 @@ conda env create -f environment_snappy.yml
 ## 실행 순서 (quick start)
 
 ```bash
+# 0) 검색만
+wsl
+curl -s "https://stac.dataspace.copernicus.eu/v1/search" -H "Content-Type: application/json" -d '{"collections":["sentinel-1-grd"],"bbox":[124.0,32.0,131.0,40.0],"datetime":"2026-07-13T00:00:00Z/2026-07-16T04:00:00Z","limit":50}' | grep -o '"id":"S1[^"]*"\|"bbox":\[[^]]*\]' | paste - -
+
 # 1) 검색 + 다운로드 (SLC와 GRD 각각)
 conda run -n s1_pipeline python main_s1_list.py
 conda run -n s1_pipeline python main_s1_list_grd.py
