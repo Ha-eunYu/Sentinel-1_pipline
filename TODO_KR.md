@@ -1,4 +1,4 @@
-# TODO (2026-07-14 갱신)
+# TODO (2026-07-20 갱신)
 
 다른 컴퓨터에서 이어서 작업할 때 참고하는 실행 목록. 배경·근거는
 [CODE_REVIEW_KR.md](CODE_REVIEW_KR.md)(코드 품질)와 [PROGRESS_KR.md](PROGRESS_KR.md)
@@ -18,7 +18,27 @@
       만드는 새 `.env`는 프로젝트 밖(예: 비밀번호 관리자, 클라우드 노트)에도
       한 부 저장해두면 같은 사고가 나도 git 작업만으로 복구 가능.
 
-## P1 — post-event 영상 (진행 중)
+## P1 — 한반도 전체 수집·탐지 (진행 중, 2026-07-20 갱신)
+
+- [x] **한반도 전체(북한 포함) GRD 일괄 수집** (7/19) — `Korea_Peninsula.geojson`
+      bbox로 6/25~7/18 재검색, 신규 44개 다운로드 → 총 73씬. 용량 확보를 위해
+      SLC 원본 103GB를 `D:\06_SAR_system_archive\sentinel1`로 이동하고 기존
+      경로에 junction 연결(스크립트 무수정 동작).
+- [ ] **RTC 배치 완료 대기** — 57+/73 진행 중 (남은 것: 7/18 ×5, S1D 6/25 아침
+      ×2·6/30·7/4 ×3·7/7 ×2·7/12·7/16 아침 등). 완료 후:
+- [ ] **7/19 신규 2씬(0B91/3194) RTC** — 배치가 시작 시점 글롭이라 이 2개는
+      대기열에 없음. 배치 종료 후 `batch_grd_rtc.py` 한 번 더 실행(완료분 자동
+      스킵).
+- [ ] **최종 baseline(v3) 재구축** — 컷오프 **7/3 유지**(7/4·7/6·7/7 제외,
+      강우 시작 가능성 때문 — 사용자 결정). 6/25 S1D 아침 ×2와 6/30이 v2에
+      빠져 있어 이것까지 넣은 최종판 필요. 재구축 전 낡은 날짜별 VRT 삭제 필수
+      (`build_baseline_composite_grd.py`가 기존 VRT를 재사용하므로).
+- [ ] **전 날짜 일관 재계산** — 현재 7/13~15는 v1, 7/8·7/10·7/16은 v2 기준으로
+      혼재. v3로 통일 후 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) 수치 갱신.
+- [ ] (선택) 7/16 북동부·강원 98km² 검출의 교차검증 — Sentinel-2 광학 또는
+      공식 피해현황(kmz)과 대조. 6/27 단일 baseline 의존이라 오탐 가능성 있음.
+
+## P1(구) — post-event 영상 (7/14 시점 기록)
 
 - [x] **S1C 하강 패스(2026-07-13 21:39~21:40 UTC, KST 7/14 06:39경) 카탈로그
       게시 확인** — 홍수일(7/8) 이후 최초 post-event 영상. 촬영→게시까지 실측
@@ -59,24 +79,21 @@
       로직을 이 두 산출물에 재사용하면 됨. 다만 이건 baseline 4개 날짜 합집합이
       아니라 pre/post 각 1개 날짜 비교라 신뢰도는 낮음(스펙클 노이즈 영향 큼).
 
-## P2 — detect_flood.py 구현 (핵심 목표, post 영상 확보 후 착수)
+## P2 — 신규 침수 탐지 (핵심 목표 — ✅ 구현됨, 개선 항목만 남음)
 
-- [ ] `detect_flood.py` 신규 작성. `build_baseline_water.py`의 `build_target_grid`,
-      `reproject_to_grid`, dB+HAND 판정 로직을 재사용:
-
-  ```text
-  post 수체 후보 = (post dB < -16) AND (HAND < 10m)
-  신규 침수     = post 수체 후보 AND (baseline_water_union == 0)
-  판정불가      = baseline_water_union == 255 인 픽셀
-  ```
-
-- [ ] 산출물: `flood_class.tif` (0=비침수, 1=신규침수, 2=기존수체, 255=판정불가) +
-      면적 통계 JSON.
-- [ ] `260709_침수피해현황_v2.kmz`(저장소에 이미 있음, 공식 피해 현황)와 대조해
-      confusion matrix 스크립트 작성 → 임계값(-16dB/HAND 10m) 튜닝 근거 확보.
+- [x] **탐지 구현 완료** — `detect_flood.py` 계획은 `detect_flood_grd.py`(v1)
+      → **`detect_flood_grd_v2.py`(현재 표준)**로 실현됨. dB<-16 + 하락폭
+      -3dB(보수적)/무하락폭(느슨) 2단계, `--dates` 날짜 선택, post 씬 경계
+      윈도우 최적화. 날짜별 결과는 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md).
+- [ ] `260709_침수피해현황_v2.kmz`(공식 피해 현황)와 대조해 confusion matrix
+      스크립트 작성 → 임계값(-16dB/-3dB) 튜닝 근거 확보.
+- [ ] HAND 결합 옵션 — 현재 v2는 HAND 미사용(전국 확장 시 타일 부족).
+      `hand_aoi.vrt`+`hand_north_orbit.vrt` 범위에서만이라도 `--hand` 옵션 추가
+      하면 그림자 오탐 감소 기대.
 - [ ] baseline 궤도 방향(ascending/descending) 혼합 이슈 — post와 같은
       relative orbit의 baseline만 비교하는 `--orbit` 옵션 고려
-      (CODE_REVIEW_KR.md P3-2).
+      (CODE_REVIEW_KR.md P3-2). 시간 변화 추적에는 필수적
+      (동일궤도 쌍: 7/1↔7/13, 6/26↔7/8, 6/28↔7/10, 6/27↔7/16, 7/6↔7/18).
 
 ## P3 — 결과값 정확도에 영향 (코드 수정, 언제든 가능)
 
@@ -155,3 +172,11 @@
       홍수 AOI, dB+HAND 합집합 — 7/14)
 - [x] 남한 전역 최신관측 baseline (`build_baseline_latest_grd.py`, dB만·HAND 미사용·
       최근 영상 우선 — 7/14). detect_flood에서 post GRD와 비교할 기준 완비.
+- [x] speckle 필터 비교(SNAP 4종 vs `filtering/` 자체구현) + `qa/` 4축 정량 평가
+      패키지 커밋 (7/15, [FILTER_COMPARISON_KR.md](FILTER_COMPARISON_KR.md))
+- [x] 재현 가능한 baseline 빌더 `build_baseline_composite_grd.py` (7/15)
+- [x] 신규침수 탐지 v1/v2 + 전범위 확장 + 핫스팟/남북 분리 도구 (7/15~16,
+      [FLOOD_DETECTION_KR.md](FLOOD_DETECTION_KR.md))
+- [x] 한반도 전체 GRD 44씬 추가 수집 + SLC 원본 D: 이동(junction) (7/19)
+- [x] baseline v2 재구축(pre-event 신규 17프레임 반영) + 7/8~7/16 날짜별
+      침수 시간선 분석 (7/20, [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md))

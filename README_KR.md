@@ -28,11 +28,23 @@ ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임
     prepare_ngii_dem.py  NGII DEM -> SNAP External DEM 변환 (필요시)
     compare_dem_rtc.py   Copernicus 30m vs NGII 5m RTC 품질 비교 실험
 
-[4] 수체 탐지
-    build_baseline_water.py       pre-event 시계열 -> 기준 수체 지도 (SLC, dB+HAND, 합집합)
-    build_baseline_water_grd.py   GRD 버전 (dB+HAND, 합집합, 홍수 AOI)
-    build_baseline_latest_grd.py  GRD 남한 전역, dB만(HAND 미사용), 최신 관측 우선
-    (detect_flood.py 예정: post 영상 확보 후 신규 침수 = post 수체 - baseline)
+[4] 수체 탐지 (baseline)
+    build_baseline_water.py         pre-event 시계열 -> 기준 수체 지도 (SLC, dB+HAND, 합집합)
+    build_baseline_water_grd.py     GRD 버전 (dB+HAND, 합집합, 홍수 AOI)
+    build_baseline_latest_grd.py    GRD 남한 전역, dB만(HAND 미사용), 최신 관측 우선
+    build_baseline_composite_grd.py pre-event 날짜모자이크 -> 최신관측 우선 합성 -> baseline
+                                    (전 과정 자동화, 현재 표준 baseline 생성 경로)
+
+[5] 신규 침수 탐지 (post vs baseline)
+    detect_flood_grd.py     v1: 7/13 3프레임, 3중 AND 보수적 판정 (참고용)
+    detect_flood_grd_v2.py  현재 버전: --dates 날짜 선택, 관측 중 최솟값 채택,
+                            보수적/느슨 2단계, post 씬 경계로 윈도우 최적화
+    split_flood_area_nk_sk.py  침수 면적을 위도 기준 남/북한 분리 집계
+    flood_hotspots.py          침수 마스크 -> 2km 격자 핫스팟 + GeoJSON
+
+[6] 필터 QA (선택)
+    filtering/  순수 파이썬 speckle 필터 6종 (SNAP과 동등성 검증됨)
+    qa/         필터 4축 정량 평가 (ENL·소하천·경계·수면분리도)
 
 [보고] export_frames_geojson.py  프레임 현황 GeoJSON (QGIS)
        export_graph_xml.py       SNAP Desktop GraphBuilder용 그래프 XML
@@ -72,7 +84,7 @@ conda env create -f environment_snappy.yml
 ```bash
 # 0) 검색만
 wsl
-curl -s "https://stac.dataspace.copernicus.eu/v1/search" -H "Content-Type: application/json" -d '{"collections":["sentinel-1-grd"],"bbox":[124.0,32.0,131.0,40.0],"datetime":"2026-07-13T00:00:00Z/2026-07-16T04:00:00Z","limit":50}' | grep -o '"id":"S1[^"]*"\|"bbox":\[[^]]*\]' | paste - -
+curl -s "https://stac.dataspace.copernicus.eu/v1/search" -H "Content-Type: application/json" -d '{"collections":["sentinel-1-grd"],"bbox":[124.0,32.0,131.0,40.0],"datetime":"2026-07-13T00:00:00Z/2026-07-16T23:59:59Z","limit":50}' | grep -o '"id":"S1[^"]*"\|"bbox":\[[^]]*\]' | paste - -
 
 # 1) 검색 + 다운로드 (SLC와 GRD 각각)
 conda run -n s1_pipeline python main_s1_list.py
@@ -114,6 +126,13 @@ download_hand.py           # GLO-30 HAND 타일 다운로드 + VRT
 prepare_ngii_dem.py        # (범용) 로컬 DEM -> SNAP External DEM 변환
 compare_dem_rtc.py         # Copernicus 30m vs NGII 5m RTC 비교 실험
 build_baseline_water.py    # pre-event 기준 수체 지도 (dB + HAND)
+build_baseline_composite_grd.py # pre-event 최신관측 우선 baseline (표준 경로)
+detect_flood_grd.py        # 신규침수 탐지 v1 (참고용)
+detect_flood_grd_v2.py     # 신규침수 탐지 현재 버전 (--dates 날짜 선택)
+split_flood_area_nk_sk.py  # 침수 면적 남/북한 분리 집계
+flood_hotspots.py          # 침수 핫스팟 추출 + GeoJSON
+filtering/                 # speckle 필터 6종 순수 파이썬 구현 (FILTER_COMPARISON_KR.md)
+qa/                        # 필터 정량 QA 4축 (compare/metrics/visualize + CLI)
 export_frames_geojson.py   # 프레임 상태 보고 GeoJSON (SLC+GRD)
 export_graph_xml.py        # SNAP Desktop용 그래프 XML 생성
 graphs/                    # 생성된 그래프 XML (GraphBuilder에서 Load 가능)
@@ -135,23 +154,22 @@ downloads/                 # 실행 결과물 (git 미추적)
   water/                   # 수체 마스크 (baseline_water_union.tif 등)
 ```
 
-## 데이터 처리 현황 (2026-07-14 기준)
+## 데이터 처리 현황 (2026-07-20 기준)
 
 | 구분 | 다운로드 | RTC | 비고 |
 | --- | --- | --- | --- |
-| GRD pre-event (`sentinel1_grd/`) | 14 / 14 완료 | 14 / 14 완료 | 6/25 S1A ×2, 6/26 S1C ×4, 7/1 S1C ×3, 7/2 S1D ×2, 7/3 S1C ×3 |
-| GRD post-event | 3 / 3 완료 | ✅ 완료 (씬당 10.5~69.4분) | 7/13 21:39~21:40 UTC S1C 하강 패스 — 홍수일(7/8) 이후 최초 촬영. 모자이크는 `gdalbuildvrt` 직접 실행(스크립트가 GRD 미지원) |
-| SLC (`sentinel1/`) | 14 / 14 완료 | 6 / 6 완료 (pre-event만) | post-event SLC 3개는 카탈로그엔 있으나 보류 중(아래) |
+| GRD 한반도 전체 (`sentinel1_grd/`) | **73 / 73 완료** | 57+ / 73 (배치 진행 중) | 6/25~7/18, `Korea_Peninsula.geojson` bbox 기준 — 북한 포함 전 씬. 7/19에 44개 일괄 추가 |
+| SLC (`sentinel1/` → **D:로 이동**) | 14 / 14 완료 | 6 / 6 완료 (pre-event만) | F: 용량 확보를 위해 `D:\06_SAR_system_archive\sentinel1`로 이동, 기존 경로에 junction 연결(스크립트 영향 없음). post-event SLC는 보류 중 |
+| baseline (pre-event) | — | v2 재구축 완료 (7/20) | 컷오프 **7/3** (7/4·7/6·7/7 제외 — 강우 시작 가능성), 7개 날짜 31프레임, 최신 관측 우선 |
+| 신규 침수 탐지 | — | 7/8·7/10·7/13·7/14·7/15·7/16 완료 | 날짜별 결과·시간선은 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) |
 
-- **SLC RTC "실패 6건"은 정상입니다.** 나머지 SLC 8개(EBE9, 0C58, 7AB0, 65DC,
-  D560, 43D6, 8105 등)는 footprint 대조 결과 홍수 AOI(경도 126.61~127.39,
-  위도 35.91~36.72)와 **교차하지 않는** 인접/동부 swath 프레임이라 Subset 단계에서
-  의도적으로 걸러집니다. 7/3 패스 3개는 경도 127.7° 동쪽 swath라 AOI 전체를 벗어남.
-- 7/2 씬 `29B8_rtc_db.tif`가 11MB로 유독 작은 것도 정상 — 해당 프레임이 AOI 남쪽
-  끄트머리만 걸쳐 서브셋 결과가 작을 뿐입니다.
-- **post-event(홍수일 7/8 이후) GRD가 처음으로 확보됐습니다** (7/13 밤 촬영,
-  7/14 카탈로그 게시). 아래 "위성 운영 상황" 참고. post-event SLC(3개, 씬ID
-  `41E9`/`64C0`/`04E2`)는 카탈로그에는 있지만 다운로드는 보류 중 — 진행 상황은
+- **홍수 침수 시간선**: 7/8 당일 저녁 관측에서 침수 최초 검출, 7/14~15 조합에서
+  남한 154.4 km²(보수적) 최대 관측 — 상세는 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md).
+- **분석 범위는 홍수 AOI가 아니라 baseline 전체 커버리지**(한반도 대부분+서해)
+  — AOI는 다운로드 범위 선정용이었을 뿐, 수재해 모니터링은 위성이 확보되는 전
+  지역 대상 ([FLOOD_DETECTION_KR.md](FLOOD_DETECTION_KR.md) 3-B절).
+- **SLC RTC "실패 6건"은 정상** — 홍수 AOI(126.61~127.39E, 35.91~36.72N) 미교차
+  프레임의 의도된 스킵. post-event SLC(`41E9`/`64C0`/`04E2`)는 보류 중 —
   [TODO_KR.md](TODO_KR.md) P1 참고.
 
 ## 위성 운영 상황과 촬영 일정 확인법
@@ -178,9 +196,9 @@ S1A는 **2026-06-29부로 12년 운영을 마치고 퇴역**했습니다
    `<coordinates>` 폴리곤이 한반도(경도 125~130, 위도 33~39)와 겹치는지 확인
 3. 촬영 후 카탈로그 등록까지 보통 3~6시간 소요
 
-참고 — 계획 KML로 확인된 다음 AOI 커버 촬영: **7/13 21:28~21:40 UTC S1C**(하강),
-**7/14 09:30~09:31 UTC S1D**(상승, 폴리곤이 홍수 AOI 정확히 커버). 이것이 최초의
-post-event 영상이 될 예정입니다.
+참고 — 홍수일(7/8) 이후 실제 확보된 post-event 관측: 7/8·7/10·7/11·7/13·7/14·
+7/15·7/16·7/18·7/19 (패스별 프레임 구성과 침수 분석 결과는
+[FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) 참고).
 
 ## 설정 포인트
 
@@ -237,6 +255,12 @@ post-event 영상이 될 예정입니다.
 
 ## 관련 문서
 
+- [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) — **침수 시간선**: 날짜별
+  위성영상·침수 면적·남북 분리, 해석 주의사항 (핵심 결과 문서)
+- [FLOOD_DETECTION_KR.md](FLOOD_DETECTION_KR.md) — 신규침수 탐지 방법론
+  (baseline 구축, 판정 기준, 전범위 확장 경위, 한계)
+- [FILTER_COMPARISON_KR.md](FILTER_COMPARISON_KR.md) — speckle 필터 4종 비교와
+  `filtering/`·`qa/` 패키지 리뷰
 - [SNAPPY_GUIDE_KR.md](SNAPPY_GUIDE_KR.md) — snappy/esa_snappy 개념, 설치, 방식 A(GPF)
   vs 방식 B(SNAPISTA/gpt), esa-snappy-master 전체 레퍼런스
 - [TERRAIN_AUX_DATA_KR.md](TERRAIN_AUX_DATA_KR.md) — HAND 개념·다운로드·활용,

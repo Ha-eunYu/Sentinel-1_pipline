@@ -1,21 +1,22 @@
-# 작업 진행 현황 (2026-07-14 기준)
+# 작업 진행 현황 (2026-07-20 기준)
 
-2026년 7월 한국 홍수(홍수일 7/8, AOI: 충청권 부여·서천·청주 인근) 모니터링
-파이프라인의 작업 이력·데이터 인벤토리·다음 할 일 정리. 파이프라인 사용법은
-[README_KR.md](README_KR.md) 참고.
+2026년 7월 한국 홍수(홍수일 7/8) 모니터링 파이프라인의 작업 이력·데이터
+인벤토리·다음 할 일 정리. 분석 범위는 충청권 AOI에서 **한반도 전체(북한
+포함)**로 확장됐습니다. 파이프라인 사용법은 [README_KR.md](README_KR.md) 참고.
 
 ## 한눈에 보기
 
 | 단계 | 상태 |
 | --- | --- |
-| GRD 검색·다운로드 (14씬) | ✅ 완료 |
-| GRD RTC (14씬 전체) | ✅ 완료 |
-| SLC 검색·다운로드 (14씬) | ✅ 완료 (7/13 EBE9 마지막 완료) |
+| GRD 검색·다운로드 (한반도 전체 73씬 + 7/19 2씬) | ✅ 완료 (7/19 2씬은 다운로드 중) |
+| GRD RTC | 🔄 57+/73 배치 진행 중 (완료 예상: 7/20 밤~7/21) |
+| SLC 검색·다운로드 (14씬) | ✅ 완료 — **원본은 D:로 이동**(junction 연결) |
 | SLC RTC (AOI 교차 6씬) | ✅ 완료 — 나머지 8씬은 AOI 미교차로 대상 아님 |
-| HAND / NGII DEM / 기준 수체 지도 | ✅ 완료 |
-| post-event GRD (7/13 밤 S1C, 3씬) | ✅ 다운로드·RTC·모자이크 완료 |
-| post-event SLC | ⬜ 보류 (사용자 요청으로 이번엔 건너뜀, "다음에 하겠습니다") |
-| 신규 침수 탐지 (`detect_flood.py`) | ⬜ 미착수 — 착수 가능 상태 (baseline은 SLC 기준이라 GRD로 하려면 GRD baseline도 필요) |
+| post-event SLC | ⬜ 보류 (사용자 요청) |
+| baseline (pre-event, 컷오프 7/3) | ✅ v2 재구축 완료 (7/20) — 배치 후 v3 최종판 예정 |
+| **신규 침수 탐지** | ✅ **구현·운용 중** (`detect_flood_grd_v2.py`) — 7/8·7/10·7/13·7/14·7/15·7/16 완료 |
+| 침수 시간선 분석 | ✅ [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) — 7/8 당일 검출, 7/14~15 최대 154.4km²(남한) |
+| speckle 필터 QA | ✅ [FILTER_COMPARISON_KR.md](FILTER_COMPARISON_KR.md) + `filtering/`·`qa/` 패키지 |
 
 ## 데이터 인벤토리 (`downloads/`)
 
@@ -162,6 +163,59 @@
     오탐 포함 값** — 육지 통계는 South_Korea 폴리곤 클립 후 재계산 필요).
     산출물: `water/baseline_water_latest_grd.tif`.
 
+### 7/15 — speckle 필터 비교 + 재현 가능 baseline + 침수탐지 v1
+
+1. **SNAP 필터 4종 비교**(multilook-only/Refined Lee/Lee/Frost, 1A5A 씬) 및
+   `filtering/`(자체 필터 6종)·`qa/`(4축 정량 QA) 패키지와 교차 검증 —
+   윈도우를 맞추면 자체 구현이 SNAP을 5~9% 이내로 재현. 상세:
+   [FILTER_COMPARISON_KR.md](FILTER_COMPARISON_KR.md) (커밋 `8792291`).
+2. **`build_baseline_composite_grd.py` 신규** — 수동 gdalbuildvrt로 만들던
+   pre-event "최신 관측 우선" 합성을 전 과정 스크립트화 (커밋 `96fd7b8`).
+3. **`detect_flood_grd.py`(v1) 신규** — 7/13 3프레임 vs baseline, 3중 AND
+   보수적 판정. 홍수 AOI 기준 신규침수 6.48km² — 커버리지 35% 한계 확인.
+4. 신규 GRD 3씬(FE43/8EF1/B126) 다운로드+RTC.
+
+### 7/16 — 전범위 확장 + 핫스팟/남북 분리
+
+1. **`detect_flood_grd_v2.py` 신규** — 7/13+14 6프레임, 픽셀별 최솟값 채택,
+   보수적/느슨 2단계 (커밋 `7420efd`). 이후 **AOI 클리핑 제거**: 분석 범위를
+   baseline 전체 커버리지로 확장(사용자 방침: "위성영상이 확보되는 모든 지역").
+   전범위 신규침수(보수적) 243.54km² — 남한 164.05 / 북한 79.49 (커밋 `6c09cb6`).
+2. **`flood_hotspots.py`·`split_flood_area_nk_sk.py` 신규** — 2km 격자 핫스팟
+   GeoJSON + 위도 기준 남/북 분리. 남한 핫스팟: 김제/부안, 논산~부여(금강),
+   대전/옥천, 당진/서산, 천안/아산, 인천/강화, 평택/화성.
+   [FLOOD_DETECTION_KR.md](FLOOD_DETECTION_KR.md) 작성.
+3. 7/14만 단독 재분석(`--dates` 옵션 추가), 7/15 신규 5씬·7/16 3씬 다운로드+RTC.
+
+### 7/19 — 한반도 전체(북한 포함) 일괄 수집
+
+1. **수집 범위 확장**: `Korea_Peninsula.geojson` bbox(124.18~130.67E,
+   33.11~43.00N)로 6/25~7/18 재검색 → 총 71씬 중 신규 44씬 식별.
+2. **디스크 확보**: F: 여유 35GB뿐 → SLC 원본 103GB(14파일)를
+   `D:\06_SAR_system_archive\sentinel1`로 robocopy /MOVE 이동 후 기존 경로에
+   **junction** 생성(스크립트 무수정 동작). 재생성 가능한 중간산출물
+   (전범위 diff 5.5GB, 필터비교 tif 3개) 삭제 → 여유 143GB 확보.
+3. 44씬 일괄 다운로드(~45GB, 전량 성공) → `batch_grd_rtc.py` 배치 시작
+   (73씬 중 신규 44씬 대상, 씬당 17~85분).
+
+### 7/20 — baseline v2 재구축 + 침수 시간선 완성
+
+1. **날짜별 침수 탐지 확장**: RTC가 끝난 날짜부터 순차 분석. 7/13(128.42km²),
+   7/14(177.02km²), 7/15(84.79km²), 7/16(0% — baseline 미커버로 비교 불가) 확인.
+2. **7/8·7/10·7/11이 "비교 불가"였던 원인 규명**: 다른 궤도(동해안/서해) 프레임
+   인데 그 궤도의 pre-event가 baseline v1에 없었음. 밤사이 배치가 같은 궤도
+   pre-event(6/26 FAA4, 6/27 S1A, 6/28 등)를 완료 → **baseline v2 재구축**
+   (컷오프 7/3 유지 — 7/4·7/6·7/7은 강우 시작 가능성으로 제외, 사용자 결정.
+   신규 17프레임 반영, 7개 날짜 31프레임).
+3. **탐지 성능 최적화**: 전체 격자(86395×72001)를 날짜와 무관하게 전부 스캔하던
+   것을 **post 씬 경계 합집합 ∩ baseline 윈도우**로 축소 — 결과 동일, 소형
+   프레임 날짜는 30분 → 1~2분.
+4. **침수 시간선 완성**: 7/8 당일 저녁 1.64km² 최초 검출(같은 궤도 6/26 FAA4
+   대비), 7/10 69.06km², 7/16 강원 동부 97.87km²(6/27 S1A 대비, v2로 비교
+   가능해짐). 7/11은 pre-event 동일궤도 미촬영으로 비교 불가 확정.
+   상세: [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md).
+5. 7/19 신규 2씬(0B91/3194) 발견·다운로드. README/TODO/PROGRESS 문서 갱신.
+
 ## 다음 할 일
 
 1. **북한 동일궤도 4.4% 어두워짐 판정 마무리**: `hand_north_orbit.vrt`가
@@ -172,11 +226,11 @@
 2. **post-event SLC**는 사용자가 "다음에 하겠습니다"로 보류함 — 필요 시
    `main_s1_list.py` 재실행(41E9/64C0/04E2 등 신규만 받아짐) 후
    `batch_slc_rtc.py`.
-3. `build_baseline_water.py`는 pre-event(baseline)만 다루므로 그대로 두고,
-   **`detect_flood.py`를 새로 작성**해 post-event 모자이크 vs baseline 비교:
-   post 수체(dB < -16 AND HAND < 10m) − `baseline_water_union.tif` = 신규 침수.
-   `build_baseline_water.py`의 격자·마스킹 로직 재사용. (GRD 기준으로 하려면
-   GRD용 baseline도 새로 만들어야 함 — 지금 baseline은 SLC 모자이크 기준.)
+3. **(최우선) RTC 배치 완료 → 마무리 사이클**: ① 배치 종료 확인 → ② 7/19
+   2씬 포함 `batch_grd_rtc.py` 재실행 → ③ baseline v3 최종 재구축(6/25 S1D
+   아침·6/30 추가, 컷오프 7/3 — 낡은 날짜별 VRT 삭제 후) → ④ 전 날짜 일관
+   재계산 → ⑤ [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) 수치 갱신.
+   상세 체크리스트는 [TODO_KR.md](TODO_KR.md) P1.
 4. (선택) 매니페스트가 top-k만 기록하는 문제 — 다운로드 대상 전체를 기록하도록
    `main_s1_list*.py` 개선하면 이번 EBE9처럼 URL을 다시 조회할 필요가 없어짐.
 5. (선택) `README_ENG.md` 전체 동기화 (현재는 검색·다운로드 단계만 다루는 구버전).

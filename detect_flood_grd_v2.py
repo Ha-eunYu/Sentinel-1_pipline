@@ -119,15 +119,42 @@ def main() -> None:
     DIFF_OUT, TOTAL_OUT, RELAXED_OUT, STRICT_OUT = output_paths(dates)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 분석 범위 = baseline 합성의 자체 격자(pre-event 전체 촬영범위 합집합).
-    # AOI로 클리핑하지 않는다 - baseline이 없는 곳은 어차피 valid=False.
+    # 분석 범위 = baseline 격자 ∩ post 씬들의 경계 합집합 (2026-07-20 최적화).
+    # 이전에는 baseline 전체 격자(86395x72001)를 날짜와 무관하게 다 스캔해서,
+    # 커버 면적이 좁은 날짜(예: 7/8 소형 프레임 1개)도 30분씩 걸렸다. post 씬이
+    # 없는 곳은 어차피 valid=False이므로, 씬 경계 합집합으로 윈도우를 좁혀도
+    # 결과(면적/마스크)는 동일하고 시간만 준다. 산출물 격자는 이 윈도우 기준.
     with rasterio.open(BASELINE_VRT) as ref:
-        transform = ref.transform
-        width = ref.width
-        height = ref.height
+        base_transform = ref.transform
+        base_width = ref.width
+        base_height = ref.height
         crs = ref.crs
-        res_deg = abs(transform.a)
-    print(f"분석 격자(baseline 전체 범위): {width} x {height} px, 해상도 {res_deg:.7f}도 (~10m)")
+        res_deg = abs(base_transform.a)
+
+    sb = None  # (minx, miny, maxx, maxy) 합집합
+    for scene in scenes:
+        with rasterio.open(scene) as ds:
+            b = (ds.bounds.left, ds.bounds.bottom, ds.bounds.right, ds.bounds.top)
+        if sb is None:
+            sb = b
+        else:
+            sb = (min(sb[0], b[0]), min(sb[1], b[1]), max(sb[2], b[2]), max(sb[3], b[3]))
+
+    win = rasterio.windows.from_bounds(*sb, transform=base_transform)
+    row0_g = max(0, int(win.row_off))
+    col0_g = max(0, int(win.col_off))
+    row1_g = min(base_height, int(win.row_off + win.height) + 1)
+    col1_g = min(base_width, int(win.col_off + win.width) + 1)
+    if row1_g <= row0_g or col1_g <= col0_g:
+        print("post 씬들이 baseline 범위와 전혀 겹치지 않습니다 - 비교 불가")
+        return
+
+    width = col1_g - col0_g
+    height = row1_g - row0_g
+    transform = rasterio.windows.transform(
+        rasterio.windows.Window(col0_g, row0_g, width, height), base_transform
+    )
+    print(f"분석 격자(baseline ∩ post 씬 합집합): {width} x {height} px, 해상도 {res_deg:.7f}도 (~10m)")
     print(f"임계값: post_min dB < {args.db} | 하락폭(strict) <= {args.drop}")
 
     m_per_deg = 111_320.0  # 위도 범위가 넓어 청크마다 중심위도로 재계산
