@@ -62,10 +62,14 @@ DEFAULT_POST_DATES = ("20260713", "20260714")
 SCENE_DATE_RE = re.compile(r"_(\d{8})T\d{6}_")
 
 
-def output_paths(dates: tuple[str, ...]) -> tuple[Path, Path, Path, Path]:
+def output_paths(dates: tuple[str, ...], tag: str = "") -> tuple[Path, Path, Path, Path]:
     # 기본(7/13+7/14) 조합은 기존에 이미 커밋/보고된 파일명을 그대로 유지하고,
     # 그 외 날짜 조합(예: 7/14만)은 날짜를 이어붙인 접미사를 쓴다.
+    # tag: 같은 post 날짜를 서로 다른 baseline으로 돌릴 때 파일명 충돌을 피하기
+    # 위한 추가 접미사 (예: 동일궤도 비교 "vs0701").
     suffix = "20260713_14" if dates == DEFAULT_POST_DATES else "_".join(dates)
+    if tag:
+        suffix = f"{suffix}_{tag}"
     return (
         OUT_DIR / f"diff_min_{suffix}_vs_baseline.tif",
         OUT_DIR / f"flood_water_total_{suffix}.tif",
@@ -107,16 +111,28 @@ def main() -> None:
         "--dates", default=",".join(DEFAULT_POST_DATES),
         help="쉼표로 구분한 post-event 날짜(YYYYMMDD). 기본은 7/13+7/14 전체",
     )
+    parser.add_argument(
+        "--baseline", default=str(BASELINE_VRT),
+        help="비교 기준 baseline VRT 경로. 기본은 pre-event 합성. 동일궤도 "
+             "비교 시 특정 pre 날짜 모자이크 VRT를 지정한다.",
+    )
+    parser.add_argument(
+        "--tag", default="",
+        help="출력 파일명 추가 접미사 (같은 post 날짜를 다른 baseline으로 돌릴 때 "
+             "충돌 방지, 예: vs0701).",
+    )
     args = parser.parse_args()
 
-    if not BASELINE_VRT.exists():
-        raise FileNotFoundError(f"{BASELINE_VRT} 없음 - build_baseline_composite_grd.py 먼저 실행")
+    baseline_vrt = Path(args.baseline)
+    if not baseline_vrt.exists():
+        raise FileNotFoundError(f"{baseline_vrt} 없음 - baseline VRT를 먼저 생성")
 
     dates = tuple(args.dates.split(","))
     scenes = post_scenes(dates)
     print(f"post-event 프레임 {len(scenes)}개: {[s.name[:35] for s in scenes]}")
+    print(f"baseline: {baseline_vrt.name}")
 
-    DIFF_OUT, TOTAL_OUT, RELAXED_OUT, STRICT_OUT = output_paths(dates)
+    DIFF_OUT, TOTAL_OUT, RELAXED_OUT, STRICT_OUT = output_paths(dates, args.tag)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # 분석 범위 = baseline 격자 ∩ post 씬들의 경계 합집합 (2026-07-20 최적화).
@@ -124,7 +140,7 @@ def main() -> None:
     # 커버 면적이 좁은 날짜(예: 7/8 소형 프레임 1개)도 30분씩 걸렸다. post 씬이
     # 없는 곳은 어차피 valid=False이므로, 씬 경계 합집합으로 윈도우를 좁혀도
     # 결과(면적/마스크)는 동일하고 시간만 준다. 산출물 격자는 이 윈도우 기준.
-    with rasterio.open(BASELINE_VRT) as ref:
+    with rasterio.open(baseline_vrt) as ref:
         base_transform = ref.transform
         base_width = ref.width
         base_height = ref.height
@@ -190,7 +206,7 @@ def main() -> None:
                     valid & (np.isnan(post_min) | (chunk < post_min)), chunk, post_min
                 )
 
-            base_db = reproject_chunk(BASELINE_VRT, win_transform, width, nrows, crs)
+            base_db = reproject_chunk(baseline_vrt, win_transform, width, nrows, crs)
 
             valid = np.isfinite(post_min) & np.isfinite(base_db)
             diff = np.where(valid, post_min - base_db, np.nan).astype("float32")
