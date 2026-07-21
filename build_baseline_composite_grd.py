@@ -84,13 +84,24 @@ def build_per_date_vrts(dates: list[str]) -> dict[str, Path]:
     return vrts
 
 
-def build_composite(vrts: dict[str, Path]) -> Path:
-    """날짜 오름차순으로 합성 VRT 생성 (나중 파일이 이겨 최신관측 우선)."""
+def build_composite(vrts: dict[str, Path], fallback_vrts: dict[str, Path] | None = None) -> Path:
+    """
+    날짜 오름차순으로 합성 VRT 생성 (나중 파일이 이겨 최신관측 우선).
+
+    fallback_vrts: 정식 pre-event 기간(컷오프 이하) 밖의 날짜인데, 해당
+    궤도에 컷오프 이하 대체 관측이 아예 없어 빈틈이 생기는 곳을 메우기 위한
+    "낮은 우선순위" 날짜. gdalbuildvrt 인자 맨 앞(최하위 우선순위)에 넣어서,
+    정식 기간 데이터가 있는 곳은 항상 그게 이기고, 정식 기간에 관측이 없는
+    지역에서만 대체값이 채워지도록 한다.
+    """
     ordered_dates = sorted(vrts.keys())
-    cmd = [
-        "gdalbuildvrt", "-srcnodata", "0", "-vrtnodata", "0",
-        str(COMPOSITE_VRT), *[str(vrts[d]) for d in ordered_dates],
+    fallback_dates = sorted((fallback_vrts or {}).keys())
+    args_in_order = [str((fallback_vrts or {})[d]) for d in fallback_dates] + [
+        str(vrts[d]) for d in ordered_dates
     ]
+    cmd = ["gdalbuildvrt", "-srcnodata", "0", "-vrtnodata", "0", str(COMPOSITE_VRT), *args_in_order]
+    if fallback_dates:
+        print(f"빈틈 메우기용(최하위 우선순위): {fallback_dates}")
     print(f"합성 순서(오래된->최신, 나중이 이김): {ordered_dates}")
     subprocess.run(cmd, check=True)
     return COMPOSITE_VRT
@@ -133,6 +144,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="pre-event GRD 최신관측 우선 baseline 생성")
     parser.add_argument("--db", type=float, default=DB_THRESHOLD_DEFAULT)
     parser.add_argument("--cutoff", default=PRE_EVENT_CUTOFF, help="이 날짜(YYYYMMDD)까지 포함")
+    parser.add_argument(
+        "--fallback-dates", default="",
+        help="컷오프 밖이지만 빈틈 메우기용으로 최하위 우선순위로 추가할 날짜들"
+             " (쉼표구분 YYYYMMDD). 해당 궤도에 컷오프 이하 대체 관측이 없는 곳만 채움.",
+    )
     args = parser.parse_args()
 
     all_tifs = sorted(RTC_GRD_DIR.glob("*_rtc_db.tif"))
@@ -140,7 +156,14 @@ def main() -> None:
     print(f"pre-event 대상 날짜({args.cutoff} 이하): {dates}")
 
     vrts = build_per_date_vrts(dates)
-    composite = build_composite(vrts)
+
+    fallback_vrts = None
+    if args.fallback_dates:
+        fb_dates = sorted(set(args.fallback_dates.split(",")))
+        print(f"빈틈 메우기용 후보 날짜: {fb_dates}")
+        fallback_vrts = build_per_date_vrts(fb_dates)
+
+    composite = build_composite(vrts, fallback_vrts)
     apply_threshold(composite, args.db)
 
 

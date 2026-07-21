@@ -158,16 +158,23 @@ downloads/                 # 실행 결과물 (git 미추적)
 
 | 구분 | 다운로드 | RTC | 비고 |
 | --- | --- | --- | --- |
-| GRD 한반도 전체 (`sentinel1_grd/`) | **73 / 73 완료** | 57+ / 73 (배치 진행 중) | 6/25~7/18, `Korea_Peninsula.geojson` bbox 기준 — 북한 포함 전 씬. 7/19에 44개 일괄 추가 |
+| GRD 한반도 전체 (`sentinel1_grd/`) | **75 / 75** (69 완료분은 NAS 검증 후 로컬 삭제) | 진행 중, 잔여 북한 관련 6씬 | 6/25~7/19, `Korea_Peninsula.geojson` bbox 기준. 일본/중국 전용 궤도 4개(`CDFD`·`1CE4`·`F598`·`F05D`)는 실제 경계 폴리곤 교차로 확인 후 제외 |
 | SLC (`sentinel1/` → **D:로 이동**) | 14 / 14 완료 | 6 / 6 완료 (pre-event만) | F: 용량 확보를 위해 `D:\06_SAR_system_archive\sentinel1`로 이동, 기존 경로에 junction 연결(스크립트 영향 없음). post-event SLC는 보류 중 |
-| baseline (pre-event) | — | v2 재구축 완료 (7/20) | 컷오프 **7/3** (7/4·7/6·7/7 제외 — 강우 시작 가능성), 7개 날짜 31프레임, 최신 관측 우선 |
-| 신규 침수 탐지 | — | 7/8·7/10·7/13·7/14·7/15·7/16 완료 | 날짜별 결과·시간선은 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) |
+| baseline (pre-event) | — | **v3 완료 (7/21)** | 컷오프 7/3 + 7/4·7/6·7/7 빈틈메우기(북한 커버리지 확장). baseline 수체 6,308 km² |
+| 신규 침수 탐지 | — | **v3로 8개 날짜 일관 재탐지 완료** | 7/4·7/7·7/13·7/14·7/15·7/16·7/18·7/19. 결과·시간선은 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) |
 
-- **홍수 침수 시간선**: 7/8 당일 저녁 관측에서 침수 최초 검출, 7/14~15 조합에서
-  남한 154.4 km²(보수적) 최대 관측 — 상세는 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md).
+- **홍수 침수 시간선(v3)**: 7/8 당일 저녁 침수 최초 검출, 7/14~15 조합에서
+  **남한 154.1 km²(보수적)** 최대 관측 — 상세는 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md).
+- **⚠️ 북한 수치는 대부분 아티팩트**: v3가 북한 커버리지를 넓혔으나 그 지역
+  baseline이 부실해(단일/자기 관측) 북한 침수가 크게 과대추정됨. 홍수 전
+  (7/4·7/7)에도 북한 검출이 나온 게 증거. **남한 수치만 신뢰**할 것 —
+  [FLOOD_NORTH_KOREA_KR.md](FLOOD_NORTH_KOREA_KR.md) 참고.
 - **분석 범위는 홍수 AOI가 아니라 baseline 전체 커버리지**(한반도 대부분+서해)
   — AOI는 다운로드 범위 선정용이었을 뿐, 수재해 모니터링은 위성이 확보되는 전
   지역 대상 ([FLOOD_DETECTION_KR.md](FLOOD_DETECTION_KR.md) 3-B절).
+- **일본/중국 씬 판별은 반드시 실제 footprint 폴리곤 교차로** — bbox 사각형
+  겹침이나 대표좌표 1점 역지오코딩(예: 다른 도구가 만든 `satellite_inventory_
+  sido_korean_*.csv`)은 대각선 SAR 스와스에서 부정확함(TODO_KR.md P1 참고).
 - **SLC RTC "실패 6건"은 정상** — 홍수 AOI(126.61~127.39E, 35.91~36.72N) 미교차
   프레임의 의도된 스킵. post-event SLC(`41E9`/`64C0`/`04E2`)는 보류 중 —
   [TODO_KR.md](TODO_KR.md) P1 참고.
@@ -257,6 +264,8 @@ S1A는 **2026-06-29부로 12년 운영을 마치고 퇴역**했습니다
 
 - [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) — **침수 시간선**: 날짜별
   위성영상·침수 면적·남북 분리, 해석 주의사항 (핵심 결과 문서)
+- [FLOOD_NORTH_KOREA_KR.md](FLOOD_NORTH_KOREA_KR.md) — **북한 지역 전용**:
+  영상 인벤토리(궤도 계열), 판별 방법론, baseline v3 빈틈메우기 설계, 한계
 - [FLOOD_DETECTION_KR.md](FLOOD_DETECTION_KR.md) — 신규침수 탐지 방법론
   (baseline 구축, 판정 기준, 전범위 확장 경위, 한계)
 - [FILTER_COMPARISON_KR.md](FILTER_COMPARISON_KR.md) — speckle 필터 4종 비교와
