@@ -38,9 +38,14 @@ ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임
 [5] 신규 침수 탐지 (post vs baseline)
     detect_flood_grd.py     v1: 7/13 3프레임, 3중 AND 보수적 판정 (참고용)
     detect_flood_grd_v2.py  현재 버전: --dates 날짜 선택, 관측 중 최솟값 채택,
-                            보수적/느슨 2단계, post 씬 경계로 윈도우 최적화
+                            보수적/느슨 2단계, post 씬 경계로 윈도우 최적화.
+                            --baseline/--tag 로 동일궤도 pre/post 쌍 비교도 가능
     split_flood_area_nk_sk.py  침수 면적을 위도 기준 남/북한 분리 집계
     flood_hotspots.py          침수 마스크 -> 2km 격자 핫스팟 + GeoJSON
+
+[5b] baseline 무관 단일시기 수체 지도 (변화 아닌 "상태")
+    build_water_per_date.py     날짜별 프레임 모자이크 -> dB<-16 수체 지도
+    build_water_single_scene.py 단일 씬 하나만 -> scene_water/<씬ID>.tif
 
 [6] 필터 QA (선택)
     filtering/  순수 파이썬 speckle 필터 6종 (SNAP과 동등성 검증됨)
@@ -126,11 +131,13 @@ download_hand.py           # GLO-30 HAND 타일 다운로드 + VRT
 prepare_ngii_dem.py        # (범용) 로컬 DEM -> SNAP External DEM 변환
 compare_dem_rtc.py         # Copernicus 30m vs NGII 5m RTC 비교 실험
 build_baseline_water.py    # pre-event 기준 수체 지도 (dB + HAND)
-build_baseline_composite_grd.py # pre-event 최신관측 우선 baseline (표준 경로)
+build_baseline_composite_grd.py # pre-event baseline (--fallback-dates 빈틈메우기)
 detect_flood_grd.py        # 신규침수 탐지 v1 (참고용)
-detect_flood_grd_v2.py     # 신규침수 탐지 현재 버전 (--dates 날짜 선택)
+detect_flood_grd_v2.py     # 신규침수 탐지 현재 버전 (--dates/--baseline/--tag)
 split_flood_area_nk_sk.py  # 침수 면적 남/북한 분리 집계
 flood_hotspots.py          # 침수 핫스팟 추출 + GeoJSON
+build_water_per_date.py    # 날짜별 baseline-무관 수체 지도
+build_water_single_scene.py # 단일 씬 수체 지도 (scene_water/)
 filtering/                 # speckle 필터 6종 순수 파이썬 구현 (FILTER_COMPARISON_KR.md)
 qa/                        # 필터 정량 QA 4축 (compare/metrics/visualize + CLI)
 export_frames_geojson.py   # 프레임 상태 보고 GeoJSON (SLC+GRD)
@@ -151,7 +158,8 @@ downloads/                 # 실행 결과물 (git 미추적)
   hand/                    # HAND 타일 + hand_aoi.vrt (홍수 AOI용).
                             # hand_north_orbit.vrt는 별도 탐색적 분석용(PROGRESS_KR.md 참고)
   dem/                     # NGII DEM AOI 클립
-  water/                   # 수체 마스크 (baseline_water_union.tif 등)
+  water/                   # 수체 마스크 (baseline, flood_water_*, diff 등)
+    scene_water/           # 단일 씬 수체 지도 (build_water_single_scene.py)
 ```
 
 ## 데이터 처리 현황 (2026-07-20 기준)
@@ -161,14 +169,15 @@ downloads/                 # 실행 결과물 (git 미추적)
 | GRD 한반도 전체 (`sentinel1_grd/`) | **75 / 75** (69 완료분은 NAS 검증 후 로컬 삭제) | 진행 중, 잔여 북한 관련 6씬 | 6/25~7/19, `Korea_Peninsula.geojson` bbox 기준. 일본/중국 전용 궤도 4개(`CDFD`·`1CE4`·`F598`·`F05D`)는 실제 경계 폴리곤 교차로 확인 후 제외 |
 | SLC (`sentinel1/` → **D:로 이동**) | 14 / 14 완료 | 6 / 6 완료 (pre-event만) | F: 용량 확보를 위해 `D:\06_SAR_system_archive\sentinel1`로 이동, 기존 경로에 junction 연결(스크립트 영향 없음). post-event SLC는 보류 중 |
 | baseline (pre-event) | — | **v3 완료 (7/21)** | 컷오프 7/3 + 7/4·7/6·7/7 빈틈메우기(북한 커버리지 확장). baseline 수체 6,308 km² |
-| 신규 침수 탐지 | — | **v3로 8개 날짜 일관 재탐지 완료** | 7/4·7/7·7/13·7/14·7/15·7/16·7/18·7/19. 결과·시간선은 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) |
+| 신규 침수 탐지 | — | **v3 8개 날짜 + 동일궤도 3쌍 완료** | v3: 7/4·7/7·7/13~16·7/18·7/19. 동일궤도: 7/13↔7/1·7/18↔7/6·7/19↔6/25. [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) |
+| 단일시기 수체 지도 | — | 6/25~7/19 전 날짜 완료 | baseline 무관 `flood_water_total_<날짜>.tif` (변화 아닌 상태) |
 
 - **홍수 침수 시간선(v3)**: 7/8 당일 저녁 침수 최초 검출, 7/14~15 조합에서
   **남한 154.1 km²(보수적)** 최대 관측 — 상세는 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md).
-- **⚠️ 북한 수치는 대부분 아티팩트**: v3가 북한 커버리지를 넓혔으나 그 지역
-  baseline이 부실해(단일/자기 관측) 북한 침수가 크게 과대추정됨. 홍수 전
-  (7/4·7/7)에도 북한 검출이 나온 게 증거. **남한 수치만 신뢰**할 것 —
-  [FLOOD_NORTH_KOREA_KR.md](FLOOD_NORTH_KOREA_KR.md) 참고.
+- **⚠️ 북한 침수는 정량화 불가**: v3(322/419/468)와 동일궤도 정공법
+  (190/254/465)이 크게 다르고, 홍수 전(7/4·7/7)에도 검출됨. 근본 원인은
+  **마른 baseline 부재** — SPN 북한 날씨 대조 결과 baseline 후보 6/25·7/1·7/6
+  전부 강수일이었다. **남한 수치만 신뢰** — [FLOOD_NORTH_KOREA_KR.md](FLOOD_NORTH_KOREA_KR.md).
 - **분석 범위는 홍수 AOI가 아니라 baseline 전체 커버리지**(한반도 대부분+서해)
   — AOI는 다운로드 범위 선정용이었을 뿐, 수재해 모니터링은 위성이 확보되는 전
   지역 대상 ([FLOOD_DETECTION_KR.md](FLOOD_DETECTION_KR.md) 3-B절).
