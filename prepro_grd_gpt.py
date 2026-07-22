@@ -9,7 +9,7 @@ AOI 정밀 분석은 SLC RTC(prepro_gpt.py)를 사용.
 
 흐름 (전체 씬 기준):
   Read -> Apply-Orbit-File -> [Remove-GRD-Border-Noise] -> ThermalNoiseRemoval
-  -> Calibration(Beta0) -> [Subset(AOI)] -> Speckle-Filter(Refined Lee)
+  -> Calibration(Beta0) -> [Subset(AOI)] -> Speckle-Filter(Frost, 기본)
   -> Terrain-Flattening -> Terrain-Correction -> LinearToFromdB -> Write(dB GeoTIFF)
 
 참고:
@@ -80,7 +80,7 @@ def build_grd_rtc_graph(
     pixel_spacing_m: float = 10.0,
     apply_border_noise_removal: bool = False,
     apply_speckle_filter: bool = True,
-    speckle_filter_name: str = "Refined Lee",
+    speckle_filter_name: str = "Frost",  # 2026-07-23 Refined Lee→Frost (FILTER_COMPARISON §6: 가는 수로 보존)
     aoi_wkt: str | None = None,
 ) -> Graph:
     """Sentinel-1 IW GRD 한 장을 RTC(Gamma0) dB GeoTIFF로 만드는 gpt 그래프.
@@ -223,7 +223,7 @@ def build_grd_gtc_graph(
     pixel_spacing_m: float = 10.0,
     apply_border_noise_removal: bool = False,
     apply_speckle_filter: bool = True,
-    speckle_filter_name: str = "Refined Lee",
+    speckle_filter_name: str = "Frost",  # 2026-07-23 Refined Lee→Frost (FILTER_COMPARISON §6: 가는 수로 보존)
     aoi_wkt: str | None = None,
 ) -> Graph:
     """Sentinel-1 IW GRD 한 장을 GTC(Sigma0, 지형 평탄화 없음) dB GeoTIFF로 만드는 gpt 그래프.

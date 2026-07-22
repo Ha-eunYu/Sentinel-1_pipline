@@ -49,7 +49,7 @@ ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임
     build_water_single_scene.py   단일 씬 하나만 -> scene_water/<씬ID>.tif
 
 [6] 필터 QA (선택)
-    filtering/  순수 파이썬 speckle 필터 6종 (SNAP과 동등성 검증됨)
+    filtering/  순수 파이썬 speckle 필터 7종 (SNAP과 동등성 검증됨; refined_lee_snap=SNAP 충실 재현)
     qa/         필터 4축 정량 평가 (ENL·소하천·경계·수면분리도)
 
 [보고] export_frames_geojson.py  프레임 현황 GeoJSON (QGIS)
@@ -146,7 +146,7 @@ build_water_single_scene.py # 단일 씬 수체 지도 (scene_water/)
 monitor_new_scenes.py      # 한반도 신규 S1 촬영 감시 (STAC, SCENE_MONITOR_KR.md)
 monitor_new_scenes.ps1     # ↑ 래퍼: 윈도우 알림 + 백그라운드/주기 실행
 archive_gtc.ps1            # GTC tif를 downloads/gtc/로 분리 보관 (배치 종료 후 실행)
-filtering/                 # speckle 필터 6종 순수 파이썬 구현 (FILTER_COMPARISON_KR.md)
+filtering/                 # speckle 필터 7종 순수 파이썬 구현 (refined_lee_snap 포함, FILTER_COMPARISON_KR.md)
 qa/                        # 필터 정량 QA 4축 (compare/metrics/visualize + CLI)
 export_frames_geojson.py   # 프레임 상태 보고 GeoJSON (SLC+GRD)
 export_graph_xml.py        # SNAP Desktop용 그래프 XML 생성
@@ -276,7 +276,9 @@ S1A는 **2026-06-29부로 12년 운영을 마치고 퇴역**했습니다
 - DEM: 기본 `Copernicus 30m Global DEM` (자동 다운로드).
   GRD는 `--dem <로컬DEM.tif>`로 NGII 5m 등 External DEM 사용 가능
   (정표고 DEM은 EGM 보정 자동 적용 — [TERRAIN_AUX_DATA_KR.md](TERRAIN_AUX_DATA_KR.md))
-- 스펙클 필터: Refined Lee (기본), `speckle_filter_name`으로 변경 가능
+- 스펙클 필터: **Frost (기본, 2026-07-23 Refined Lee에서 변경 — FILTER_COMPARISON §6)**,
+  `speckle_filter_name`으로 변경 가능. ⚠️ 기존 RTC 65개는 Refined Lee(7×7)라 필터
+  혼재 — 일관성 필요 시 재처리 권장([GTC_RTC_PROCESSING_LOG_KR.md](GTC_RTC_PROCESSING_LOG_KR.md))
 - 출력: dB GeoTIFF 하나만 (GeoTIFF 쓰기가 단일 스레드 병목이라 이중 쓰기 금지)
 
 ### 수체 탐지 임계값 (build_baseline_water.py)

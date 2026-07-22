@@ -234,6 +234,9 @@ median) + 공통 인프라 + SNAP 필터 참조문헌 카탈로그로 구성.
 
 1. **SNAP 파이프라인 필터**: 홍수/수체 매핑에서 가는 수로 보존이 중요하면 현재 기본값
    **Refined Lee → Frost 전환 검토**(speckle 억제 동등, 가는 선·경계 보존 우수).
+   → **2026-07-23 적용됨**: `prepro_grd_gpt.py` 기본 `speckle_filter_name`을 Frost로
+   변경. 단 기존 RTC 65개는 Refined Lee라 필터 혼재 — 일관성 필요 시 전 씬 재처리
+   권장([GTC_RTC_PROCESSING_LOG_KR.md](GTC_RTC_PROCESSING_LOG_KR.md) 1절 주의).
 2. **필터 파라미터**: speckle을 더 세게 잡고 싶으면 필터 종류보다 **윈도우를 키우는 것
    (3×3→5×5→7×7)** 이 직접적이다. 단 경계·선 보존과 트레이드오프.
 3. **`filtering` 폴더**는 SNAP을 잘 재현한 검증된 순수 파이썬 구현이라, SNAP 없이(예:

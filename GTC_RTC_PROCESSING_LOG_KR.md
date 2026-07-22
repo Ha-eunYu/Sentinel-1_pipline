@@ -23,18 +23,29 @@
 | 편파 | VV |
 | 궤도 | Apply-Orbit-File, Sentinel Precise (Auto Download), 없으면 RESORB 대체 |
 | Thermal Noise | 제거 (removeThermalNoise=true) |
-| Speckle 필터 | Refined Lee |
+| Speckle 필터 | **Frost (3×3, damping 2.0)** — 2026-07-23 Refined Lee에서 변경 (아래 주의) |
 | DEM | Copernicus 30m Global DEM (자동 다운로드) |
 | 리샘플링 | BILINEAR_INTERPOLATION (img·dem) |
 | 픽셀 간격 | 10 m |
 | 출력 | dB (LinearToFromdB), GeoTIFF-BigTIFF, EPSG:4326 |
 | gpt 옵션 | `-q 8 -c 14G` |
 
+> **⚠️ 2026-07-23 speckle 필터 기본값 변경 (Refined Lee → Frost)**:
+> [FILTER_COMPARISON_KR.md](FILTER_COMPARISON_KR.md) §2·§6 권고(Frost가 speckle
+> 억제는 동등하면서 가는 수로·경계 보존이 우수)에 따라 `prepro_grd_gpt.py`의
+> 기본 `speckle_filter_name`을 **Frost(SNAP 기본 3×3, damping 2.0)**로 바꿨다.
+> **주의**: 이 문서 2절 인벤토리의 기존 RTC/GTC 65개는 전부 **Refined Lee(7×7)**로
+> 처리된 것이다. 앞으로 새로 돌리는 산출물은 Frost라 기존과 필터가 섞인다.
+> dB 절대값이 필터에 따라 조금 달라지므로, 고정 임계값(-16dB)으로 날짜·궤도를
+> 넘나드는 비교를 계속하려면 **전 씬을 Frost로 재처리하는 것을 권장**한다
+> (재처리 전까지는 필터 혼재를 감안). 현재 실행 중인 GTC 배치는 이미 로드된
+> 옛 기본값(Refined Lee)으로 남은 씬을 마저 처리한다(GTC는 육안 비교 전용이라 영향 작음).
+
 ### RTC 그래프 (기본 파이프라인, `build_grd_rtc_graph`)
 
 ```text
 Read → Apply-Orbit-File → ThermalNoiseRemoval → Calibration(Beta0)
-     → [Subset(AOI)*] → Speckle-Filter(Refined Lee)
+     → [Subset(AOI)*] → Speckle-Filter(Frost, 기본)
      → Terrain-Flattening → Terrain-Correction → LinearToFromdB
      → Write(<씬ID>_rtc_db.tif)
 ```
@@ -47,7 +58,7 @@ Read → Apply-Orbit-File → ThermalNoiseRemoval → Calibration(Beta0)
 
 ```text
 Read → Apply-Orbit-File → ThermalNoiseRemoval → Calibration(Sigma0)
-     → [Subset(AOI)*] → Speckle-Filter(Refined Lee)
+     → [Subset(AOI)*] → Speckle-Filter(Frost, 기본)
      → Terrain-Correction → LinearToFromdB
      → Write(<씬ID>_gtc_db.tif)
 ```
