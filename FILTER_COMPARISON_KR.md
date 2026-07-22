@@ -245,6 +245,44 @@ median) + 공통 인프라 + SNAP 필터 참조문헌 카탈로그로 구성.
 
 ---
 
+## 7. SNAP 충실 재현 Refined Lee 추가 (`filtering/refined_lee_snap.py`, 2026-07-23)
+
+3-B에서 확인된 "`filtering.refined_lee`(단순화판)가 SNAP Refined Lee와 강도가
+다르다"는 문제 때문에, **SNAP `RefinedLee.java`를 그대로 numpy로 옮긴 충실
+재현판**을 새 모듈로 추가했다. SNAP 없이(다른 PC·배치 후처리) SNAP과 (거의)
+같은 Refined Lee 결과가 필요할 때 쓴다.
+
+**단순화판과의 차이 (SNAP 원본 대조로 구현)**
+
+| 항목 | refined_lee (단순화) | refined_lee_snap (SNAP 충실) |
+| --- | --- | --- |
+| 후보 방향 | 상·하·좌·우·전체 5개 | **8방향 edge-aligned**(대각선 포함), 전체윈도우 미포함 |
+| 윈도우 | 임의 홀수(기본 7) | **7×7 고정**(SNAP 사양) |
+| 잡음분산 sigmaV | 고정 `1/ENL` | **데이터에서 국소 추정**(9개 서브영역 정규화분산 중 최소 5개 평균), ENL 미사용 |
+| 서브영역 판정 | 분산 최소 후보 선택 | 3×3 서브평균 gradient로 8방향 중 선택 (SNAP `getDirection`) |
+
+**검증(합성 speckle, 단일룩 ENL≈1)**: 균질부 ENL 0.98→**9.28**(평활화 정상),
+경계 계단 0.944→**0.924**(97.9% 보존), NaN 누수 0. 특히 **가는 선 대비가
+0.998→0.36으로 크게 줄어**, 2절에서 관찰된 **"SNAP Refined Lee가 가는 선을
+가장 많이 지운다"**는 특성을 재현한다(같은 입력에서 단순화판은 0.68로 선을
+더 남김). 즉 단순화판보다 SNAP 거동에 부합한다.
+
+**사용법**
+
+```python
+from filtering import refined_lee_snap_filter, apply_speckle_filter
+refined_lee_snap_filter("scene_linear.tif", "scene_rl.tif")            # 직접 호출(7×7 고정)
+apply_speckle_filter("scene_linear.tif", "scene_rl.tif",
+                     method="refined_lee_snap")                        # 디스패처 경유
+```
+
+**주의**: 입력은 반드시 **linear power**(dB 아님). **ENL 인자를 받지 않는다**
+(sigmaV를 국소 추정). SNAP과 미세하게 다를 수 있는 점(nodata 처리, 표본분산
+분모 (k−1) 가정, sigmaV 정렬 off-by-one, varY==0 시 지역평균 반환)은
+`refined_lee_snap.py` docstring에 명시했다.
+
+---
+
 ### 부록 — 산출물 위치
 
 - SNAP 필터별 RTC: `downloads/rtc_grd/S1C_..._1A5A_COG_rtc_db{,_lee,_frost,_nofilter}.tif`
