@@ -126,13 +126,14 @@ def main() -> None:
         polarization=None,
     )
 
+    # 받고 싶은 날짜만 지정하면 그 날짜에 가까운 촬영일 순으로 내려받는다.
+    # (라벨, "YYYY-MM-DD"). 시각은 필요 없다 — 날짜 근접도로 정렬한다.
     targets = [
-        ("Korea_flood", "2026-07-20T18:30:00+09:00"),  # KST 촬영 시각
-        # ("Jeddah_flood", "2022-11-24"),
-        # ("ICEYE_ref", "2021-01-21"),
-        # ("UMBRA_ref", "2024-07-17"),
-        # ("Capella_ref", "2024-08-19"),
+        ("Korea_flood", "2026-07-20"),
     ]
+
+    # 유일한 설정: 이 날짜 근접순으로 최대 몇 개를 내려받을지. None = 후보 전부.
+    MAX_DOWNLOADS = 10
 
     client = open_cdse_stac_client(cdse_cfg)
 
@@ -146,8 +147,7 @@ def main() -> None:
 
     for sensor, date_str in targets:
         print(f"\n=== {sensor} | target={date_str} | collection={cfg.collection} ===")
-        # res = list_s1_items_for_date(client, date_str, cfg, k=cfg.max_items)
-        res = list_s1_items_for_date(client, date_str, cfg, k=2)  # 테스트용으로 1개만 검색
+        res = list_s1_items_for_date(client, date_str, cfg)
         results["targets"].append({"sensor": sensor, **res})
 
         if res["status"] != "ok":
@@ -156,9 +156,14 @@ def main() -> None:
 
         print("-> search used:", res["search_used"])
         print("-> count found:", res["count_found"])
-        
-        
-        for i, cand in enumerate(res["candidates_topk"], start=1):
+
+        # 지정 날짜 근접순 후보에서 MAX_DOWNLOADS개만 선택(None이면 전부).
+        cands = res["candidates"]
+        if MAX_DOWNLOADS is not None:
+            cands = cands[:MAX_DOWNLOADS]
+        print(f"-> 근접순 선택: {len(cands)}개 (전체 {res['count_found']}개 중)")
+
+        for i, cand in enumerate(cands, start=1):
             print(f"   [{i}] id={cand['id']}")
             print(f"       datetime={cand['datetime']}")
             print(f"       platform={cand['platform']}")
@@ -171,11 +176,6 @@ def main() -> None:
             print(f"       product_href={cand['product_href']}")
             print(f"       zipper_url={cand['zipper_url']}")
             selected_items.append(cand)
-            
-            # # Jeddah pre/post pair:
-            # # 2022-11-17 and 2022-11-29
-            # if cand["id"].startswith("S1A_IW_SLC__1SDV_20221117") or cand["id"].startswith("S1A_IW_SLC__1SDV_20221129"):
-            #     selected_item_ids.append(cand["id"])
 
     # SLC용 manifest(s1_stac_list_manifest.json)를 덮어쓰지 않도록 GRD 전용 파일로 저장
     out_path = out_cfg.out_dir / "s1_stac_list_manifest_grd.json"
@@ -189,11 +189,7 @@ def main() -> None:
     # 첫 zip을 자동 선택하므로 GRD가 섞이면 SLC 체인에 잘못 들어갈 수 있음
     download_dir = out_cfg.out_dir / "sentinel1_grd"
 
-    # 다운로드 개수 제한 (None = 후보 전부, 테스트 시 1 등으로 제한)
-    max_downloads = None
-    if max_downloads is not None:
-        selected_items = selected_items[:max_downloads]
-
+    # (개수 제한은 위 MAX_DOWNLOADS에서 이미 적용됨)
     for cand in selected_items:
         try:
             out_file = download_dir / f"{cand['id']}.zip"

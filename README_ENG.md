@@ -93,28 +93,26 @@ To build a new AOI for different points, edit the `coordinates` in `Korea_flood_
 
 ## Setting the target acquisition time
 
-The `targets` list in `main_s1_list.py` sets the reference time used for ranking search results.
+The `targets` list in `main_s1_list.py` takes a **date only** — results are ranked by date
+proximity, so no time or timezone is needed.
 
 ```python
 targets = [
-    ("Korea_flood", "2026-07-08T18:30:00+09:00"),  # KST acquisition time
+    ("Korea_flood", "2026-07-20"),   # date only
 ]
 ```
 
-- **Always include an explicit timezone offset** (`+09:00` for KST). If you give a date only
-  (no offset/time), it defaults to midnight UTC (= 09:00 KST), which can skew the "closest in
-  time" ranking away from the actual acquisition you care about.
-- `window_days` (currently 15) controls how many days before/after the target time to search.
-  Adjust it via `cfg.window_days`.
+- `window_days` (currently 15) only bounds the search window (±N days); you rarely need to touch it.
+- `MAX_DOWNLOADS` (top of `main_s1_list*.py`, default 10, `None` = all found) is the **only knob**.
 
-## How results are ranked
+## How results are ranked (date proximity)
 
-- With `sort_by_time_diff=True` (default), results are sorted by how close their acquisition
-  time is to the target time.
-- When only the top-k (default 10) are kept, a satellite (S1A/S1C/S1D) is **not silently dropped**
-  just because its closest pass happens to be slightly farther from the target time than another
-  satellite's — `list_s1_items_for_date` in `stac/search_s1.py` guarantees at least one candidate
-  per satellite that actually appears in the search results.
+- Candidates are sorted by **how close their acquisition date is** to the target date, then by
+  acquisition time as a stable tiebreak (`score_item` in `stac/search_s1.py`).
+- `list_s1_items_for_date` returns all found candidates sorted this way; the driver then keeps the
+  nearest `MAX_DOWNLOADS`. The old "top-k + per-satellite guarantee" logic was removed because it
+  could drop frames of the same pass; give a generous `MAX_DOWNLOADS` (or `None`) to pull a whole
+  date's frames.
 
 ## Running it
 
@@ -124,11 +122,11 @@ python main_s1_list.py
 
 This will:
 
-1. Search CDSE STAC using the `Korea_flood_AOI.geojson` AOI and the time set in `targets`.
+1. Search CDSE STAC using the Korea AOI and the date set in `targets`.
 2. Save the search results to `downloads/s1_stac_list_manifest.json`.
-3. Download **every top-k candidate found**, in order, into `downloads/sentinel1/*.zip`
-   (already-downloaded files are skipped automatically; an interrupted download resumes on the
-   next run).
+3. Download the **nearest-date `MAX_DOWNLOADS` candidates**, in order, into
+   `downloads/sentinel1/*.zip` (already-downloaded files are skipped automatically; an interrupted
+   download resumes on the next run).
 
 ## Caveats (read before running)
 

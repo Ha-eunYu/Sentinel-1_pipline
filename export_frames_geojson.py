@@ -79,7 +79,8 @@ def load_manifest_candidates(manifest_path: Path) -> tuple[dict[str, dict], dict
 
     candidates: dict[str, dict] = {}
     for target in manifest.get("targets", []):
-        for cand in target.get("candidates_topk", []):
+        # 신규 매니페스트는 "candidates", 구버전은 "candidates_topk" 키 사용
+        for cand in target.get("candidates", target.get("candidates_topk", [])):
             candidates.setdefault(cand["id"], cand)
 
     aoi_geom = manifest.get("config", {}).get("intersects_geojson")

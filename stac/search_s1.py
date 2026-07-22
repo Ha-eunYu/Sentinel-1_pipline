@@ -113,21 +113,26 @@ def build_query(cfg: S1SearchConfig) -> Dict[str, Any]:
 
     return query
 
-def score_item(item, target_dt: datetime) -> tuple[float, datetime]:
+def score_item(item, target_dt: datetime) -> tuple[int, datetime]:
+    """지정 날짜와의 **일(day) 근접도**로 정렬하기 위한 키.
+    1순위: 촬영일과 지정일의 날짜 차이(일). 2순위: 실제 촬영 시각(오름차순)으로
+    같은 근접도끼리 안정 정렬."""
     dt_str = (item.properties or {}).get("datetime")
     if not dt_str:
-        return (float("inf"), datetime.max.replace(tzinfo=timezone.utc))
+        return (10**9, datetime.max.replace(tzinfo=timezone.utc))
 
     dt = to_dt_utc(dt_str)
-    dt_diff_hours = abs((dt - target_dt).total_seconds()) / 3600.0
-    return (dt_diff_hours, dt)
+    day_diff = abs((dt.date() - target_dt.date()).days)
+    return (day_diff, dt)
 
 def list_s1_items_for_date(
     client,
     target_date: str,
     cfg: S1SearchConfig,
-    k: int = 20,
     ) -> Dict[str, Any]:
+    """지정 날짜(target_date) 주변(±cfg.window_days)에서 검색한 뒤, **지정 날짜에
+    가까운 촬영일 순**으로 정렬한 후보 전체를 반환한다. 몇 개를 실제로 받을지는
+    호출부의 max_downloads로 정한다(이 함수는 개수를 자르지 않는다)."""
     target_dt = parse_target_datetime_utc(target_date)
     datetime_range = make_datetime_range(target_date, cfg.window_days)
 
@@ -169,26 +174,9 @@ def list_s1_items_for_date(
             },
         }
 
-    if cfg.sort_by_time_diff:
-        ranked = sorted(items, key=lambda x: score_item(x, target_dt))
-
-        # 목표 시각에 가장 가까운 순으로 상위 k개를 고르되, 검색 결과에 등장한
-        # 위성(platform, 예: S1A/S1C/S1D)이 상위 k에 들지 못해 통째로 누락되는
-        # 일이 없도록 위성별 최근접 후보를 최소 1개씩 보장한다.
-        topk_items = ranked[:k]
-        covered_platforms = {
-            extract_s1_summary(it).platform for it in topk_items
-        }
-        for it in ranked:
-            platform = extract_s1_summary(it).platform
-            if platform not in covered_platforms:
-                topk_items.append(it)
-                covered_platforms.add(platform)
-        topk_items.sort(key=lambda x: score_item(x, target_dt))
-    else:
-        topk_items = sorted(items, key=lambda x: x.properties.get("datetime", ""))[:k]
-
-    topk = [extract_s1_summary(it).__dict__ for it in topk_items]
+    # 지정 날짜에 가까운 촬영일 순으로 후보 전체를 정렬(개수 제한은 호출부에서).
+    ranked = sorted(items, key=lambda x: score_item(x, target_dt))
+    candidates = [extract_s1_summary(it).__dict__ for it in ranked]
 
     return {
         "target_date": target_date,
@@ -201,5 +189,5 @@ def list_s1_items_for_date(
             "query": query,
         },
         "count_found": len(items),
-        "candidates_topk": topk,
+        "candidates": candidates,
     }

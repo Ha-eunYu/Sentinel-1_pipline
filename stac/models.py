@@ -18,7 +18,6 @@ class S1SearchConfig:
     orbit_state: Optional[str] = None    # "ascending" / "descending"
     product_type: Optional[str] = None   # e.g. GRD, SLC family filter if needed
     polarization: Optional[str] = None   # e.g. DV, DH, SV, SH
-    sort_by_time_diff: bool = True
 
     def __post_init__(self) -> None:
         if self.bbox is None and self.intersects_geojson is None:

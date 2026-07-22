@@ -120,7 +120,7 @@ config.py                  # .env 로드, CDSEConfig / OutputConfig
 stac/
   client.py                # CDSE STAC 클라이언트
   models.py                # S1SearchConfig, 날짜 파싱
-  search_s1.py             # 검색 + 목표시각 근접 정렬 + 위성별 커버 보장
+  search_s1.py             # 검색 + 지정 날짜 근접순 정렬 (MAX_DOWNLOADS로 개수 제한)
   download_s1.py           # 토큰 발급, zipper 다운로드 (이어받기/재시도)
 prepro_gpt.py              # SLC -> RTC dB (snapista/gpt, AOI 서브셋)
 prepro_grd_gpt.py          # GRD -> RTC/GTC dB (전체 씬, --aoi/--dem/--gtc 옵션)
@@ -253,17 +253,22 @@ S1A는 **2026-06-29부로 12년 운영을 마치고 퇴역**했습니다
 - **전처리/수체탐지 AOI**: `Korea_flood_AOI.geojson` — SLC 서브셋과
   `build_baseline_water.py`의 기준 격자가 이 폴리곤(+0.1도 여유)을 따름
 
-### 목표 시각
+### 목표 날짜 지정
 
-`main_s1_list*.py`의 `targets` 리스트. **타임존 오프셋(+09:00) 필수.**
-`window_days`(현재 15일)가 검색 창을 결정합니다.
+`main_s1_list*.py`의 `targets` 리스트에 **날짜만** 넣습니다:
+`("라벨", "YYYY-MM-DD")` (예: `("Korea_flood", "2026-07-20")`). 시각·타임존은
+필요 없습니다 — **날짜 근접도**로 정렬하기 때문입니다. `window_days`(현재 15일)는
+검색 창(±N일)일 뿐 신경 쓸 필요가 거의 없습니다.
 
-### 검색 결과 선별 방식
+### 검색 결과 선별 방식 (날짜 근접순)
 
-목표 시각 근접순 top-k(기본 10) + 검색에 등장한 위성별 최근접 1개 보장.
-**같은 패스의 모든 프레임을 받는 방식이 아니므로**, 특정 날짜의 전체 프레임이
-필요하면 후보에서 빠진 프레임을 ID 지정으로 별도 다운로드해야 합니다
-(프레임 현황은 `export_frames_geojson.py` 결과를 QGIS로 확인).
+지정 날짜에 **가까운 촬영일 순**으로 후보를 정렬한 뒤, **`MAX_DOWNLOADS`개**만
+내려받습니다. 이것이 **유일한 설정값**입니다(`main_s1_list*.py` 상단, 기본 10,
+`None`이면 창 안의 후보 전부). 예전의 "목표 시각 top-k + 위성별 보장" 방식은
+같은 패스 프레임이 우연히 탈락하는 문제가 있어 제거했습니다 — 이제 근접 일자의
+프레임을 `MAX_DOWNLOADS` 한도까지 순서대로 받으므로, 한도를 넉넉히 주면(또는
+`None`) 해당 날짜의 프레임이 통째로 들어옵니다. 프레임 현황은
+`export_frames_geojson.py` 결과를 QGIS로 확인.
 
 ### RTC 처리 파라미터 (prepro_gpt.py / prepro_grd_gpt.py)
 
