@@ -137,6 +137,7 @@ build_baseline_composite_grd.py # pre-event baseline (--fallback-dates 빈틈메
 detect_flood_grd.py        # 신규침수 탐지 v1 (참고용)
 detect_flood_grd_v2.py     # 신규침수 탐지 현재 버전 (--dates/--baseline/--tag)
 split_flood_area_nk_sk.py  # 침수 면적 남/북한 분리 집계
+verify_scene_footprint.py  # 특정 씬 격리 수체지도 + 경계 내부비율 검증 (SCENE_FOOTPRINT_REAUDIT §5)
 flood_hotspots.py          # 침수 핫스팟 추출 + GeoJSON
 build_water_per_date.py    # 날짜별 baseline-무관 수체 지도 (고정 dB<-16)
 build_water_per_date_otsu.py # 궤도별·날짜별 타일기반 Otsu 수체 지도 (water_otsu/)
