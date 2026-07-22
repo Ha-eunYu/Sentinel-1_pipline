@@ -44,8 +44,9 @@ ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임
     flood_hotspots.py          침수 마스크 -> 2km 격자 핫스팟 + GeoJSON
 
 [5b] baseline 무관 단일시기 수체 지도 (변화 아닌 "상태")
-    build_water_per_date.py     날짜별 프레임 모자이크 -> dB<-16 수체 지도
-    build_water_single_scene.py 단일 씬 하나만 -> scene_water/<씬ID>.tif
+    build_water_per_date.py       날짜별 프레임 모자이크 -> dB<-16 수체 지도
+    build_water_per_date_otsu.py  궤도별·날짜별, 타일기반 Otsu 자동임계값 -> water_otsu/
+    build_water_single_scene.py   단일 씬 하나만 -> scene_water/<씬ID>.tif
 
 [6] 필터 QA (선택)
     filtering/  순수 파이썬 speckle 필터 6종 (SNAP과 동등성 검증됨)
@@ -69,14 +70,14 @@ ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임
 ### 환경 1: s1_pipeline (검색·다운로드·보고)
 
 ```bash
-conda env create -f environment.yml
+conda env create -f env/environment.yml
 cp .env.example .env   # CDSE_USERNAME / CDSE_PASSWORD 입력
 ```
 
 ### 환경 2: s1_snappy (SNAP 전처리·분석)
 
 ```bash
-conda env create -f environment_snappy.yml
+conda env create -f env/environment_snappy.yml
 # SNAP Desktop 설치 후, SNAP의 bin 폴더에서 이 환경의 python을 연결:
 "C:\Program Files\snap\bin\snappy-conf.bat" <s1_snappy 환경의 python.exe 경로>
 # 확인: conda run -n s1_snappy python -c "import esa_snappy"
@@ -122,10 +123,11 @@ stac/
   search_s1.py             # 검색 + 목표시각 근접 정렬 + 위성별 커버 보장
   download_s1.py           # 토큰 발급, zipper 다운로드 (이어받기/재시도)
 prepro_gpt.py              # SLC -> RTC dB (snapista/gpt, AOI 서브셋)
-prepro_grd_gpt.py          # GRD -> RTC dB (전체 씬, --aoi/--dem 옵션)
+prepro_grd_gpt.py          # GRD -> RTC/GTC dB (전체 씬, --aoi/--dem/--gtc 옵션)
 prepro.py                  # (참고용) esa_snappy GPF 직접 호출 버전 - 아래 '주의' 참고
 batch_slc_rtc.py           # SLC 일괄 처리 (SSD 복사, 스킵/재개, AOI 미교차 자동 건너뜀)
-batch_grd_rtc.py           # GRD 일괄 처리
+batch_grd_rtc.py           # GRD 일괄 처리 (RTC)
+batch_grd_gtc.py           # GRD 일괄 처리 (GTC, TF 생략 대조군 - RTC_VS_GTC_KR.md)
 build_rtc_mosaic.py        # 날짜별 RTC 모자이크 VRT
 download_hand.py           # GLO-30 HAND 타일 다운로드 + VRT
 prepare_ngii_dem.py        # (범용) 로컬 DEM -> SNAP External DEM 변환
@@ -136,44 +138,70 @@ detect_flood_grd.py        # 신규침수 탐지 v1 (참고용)
 detect_flood_grd_v2.py     # 신규침수 탐지 현재 버전 (--dates/--baseline/--tag)
 split_flood_area_nk_sk.py  # 침수 면적 남/북한 분리 집계
 flood_hotspots.py          # 침수 핫스팟 추출 + GeoJSON
-build_water_per_date.py    # 날짜별 baseline-무관 수체 지도
+build_water_per_date.py    # 날짜별 baseline-무관 수체 지도 (고정 dB<-16)
+build_water_per_date_otsu.py # 궤도별·날짜별 타일기반 Otsu 수체 지도 (water_otsu/)
+water_area_report.py       # 수체 면적 산출·비교 (픽셀 행별보정 / 폴리곤 측지, WATER_AREA_KR.md)
 build_water_single_scene.py # 단일 씬 수체 지도 (scene_water/)
+monitor_new_scenes.py      # 한반도 신규 S1 촬영 감시 (STAC, SCENE_MONITOR_KR.md)
+monitor_new_scenes.ps1     # ↑ 래퍼: 윈도우 알림 + 백그라운드/주기 실행
+archive_gtc.ps1            # GTC tif를 downloads/gtc/로 분리 보관 (배치 종료 후 실행)
 filtering/                 # speckle 필터 6종 순수 파이썬 구현 (FILTER_COMPARISON_KR.md)
 qa/                        # 필터 정량 QA 4축 (compare/metrics/visualize + CLI)
 export_frames_geojson.py   # 프레임 상태 보고 GeoJSON (SLC+GRD)
 export_graph_xml.py        # SNAP Desktop용 그래프 XML 생성
 graphs/                    # 생성된 그래프 XML (GraphBuilder에서 Load 가능)
-Korea_flood_AOI.geojson    # 홍수 피해 지역 AOI (전처리 서브셋/수체 탐지 기준)
-South_Korea.geojson        # 남한 본토 간략 폴리곤 (검색용 - 제주 미포함 주의)
-Korea_Peninsula.geojson    # 한반도 전체 (광역 검색용)
+geojson/                   # AOI·경계 폴리곤 (2026-07-22 폴더 분리)
+  Korea_flood_AOI.geojson  #   홍수 피해 지역 AOI (전처리 서브셋/수체 탐지 기준)
+  South_Korea.geojson      #   남한 본토 간략 폴리곤 (검색용 - 제주 미포함 주의)
+  Korea_Peninsula.geojson  #   한반도 전체 (남북 실경계, footprint 분류용)
+  Korea.geojson            #   한반도 단일 폴리곤 (main_s1_list_grd.py 검색 AOI)
+  NK.geojson               #   북한 경계
+env/                       # conda 환경 정의 (environment.yml / environment_snappy.yml)
+kmz/                       # 공식 침수 피해현황 kmz (육안 대조용)
+data/                      # 기타 데이터 (satellite_inventory csv, tree.txt, graphs.zip)
 SNAPPY_GUIDE_KR.md         # snappy/esa_snappy/SNAPISTA 가이드 (esa-snappy-master 레퍼런스)
 TERRAIN_AUX_DATA_KR.md     # HAND / NGII DEM 가이드
+RTC_VS_GTC_KR.md           # RTC를 쓰는 이유 (GTC 대조군 개념 설명)
+GTC_RTC_PROCESSING_LOG_KR.md # 어떤 씬을 RTC/GTC 했는지 인벤토리·처리과정 (+GTC 정리 방침 5절)
+OTSU_SPLIT_BASED_KR.md     # 타일기반 Otsu 방법론·레퍼런스 (Otsu/Martinis/Chini)
+WATER_AREA_KR.md           # 궤도별·날짜별 수체 면적 (pixel_perrow 기준)
+SCENE_MONITOR_KR.md        # 신규 S1 촬영 자동 감시 + 윈도우 백그라운드 설정
+SCENE_FOOTPRINT_REAUDIT_KR.md # footprint 재감사 (7/8·7/10 수치 무효화)
 esa-snappy-master/         # esa-snappy 공식 저장소 사본 (참고 문서·소스)
 downloads/                 # 실행 결과물 (git 미추적)
   s1_stac_list_manifest.json / s1_stac_list_manifest_grd.json
   sentinel1/*.zip          # SLC 원본
   sentinel1_grd/*.zip      # GRD 원본 (COG SAFE, 씬ID가 _COG로 끝남)
   rtc/                     # SLC RTC dB + 날짜별 모자이크 VRT
-  rtc_grd/                 # GRD RTC dB (+ DEM 비교 실험 산출물)
+  rtc_grd/                 # GRD RTC dB (+ 배치 진행 중에는 GTC _gtc_db.tif 나란히;
+                            #   배치 종료 후 archive_gtc.ps1로 gtc/로 분리)
   hand/                    # HAND 타일 + hand_aoi.vrt (홍수 AOI용).
                             # hand_north_orbit.vrt는 별도 탐색적 분석용(PROGRESS_KR.md 참고)
   dem/                     # NGII DEM AOI 클립
+  gtc/                     # GTC 산출물 <씬ID>_gtc_db.tif 분리 보관 (육안 비교 전용)
+  excluded_china_japan/    # 일본/중국 전용(footprint 0%) 씬 분리 보관 (tif만)
   water/                   # 수체 마스크 (baseline, flood_water_*, diff 등)
     scene_water/           # 단일 씬 수체 지도 (build_water_single_scene.py)
+  water_otsu/              # 궤도별·날짜별 타일기반 Otsu 수체 지도 + otsu_thresholds.csv
+  monitor_state.json / new_scenes.log  # 신규 씬 감시 상태·로그
 ```
 
-## 데이터 처리 현황 (2026-07-20 기준)
+## 데이터 처리 현황 (2026-07-22 기준)
 
 | 구분 | 다운로드 | RTC | 비고 |
 | --- | --- | --- | --- |
-| GRD 한반도 전체 (`sentinel1_grd/`) | **75 / 75** (69 완료분은 NAS 검증 후 로컬 삭제) | 진행 중, 잔여 북한 관련 6씬 | 6/25~7/19, `Korea_Peninsula.geojson` bbox 기준. 일본/중국 전용 궤도 4개(`CDFD`·`1CE4`·`F598`·`F05D`)는 실제 경계 폴리곤 교차로 확인 후 제외 |
+| GRD 한반도 전체 (`sentinel1_grd/`) | 6/25~7/20 수집 (NAS 재병합 포함, 완료분 zip은 삭제) | **RTC 58 / GTC 53+ 완료** (GTC 배치 진행 중) | 6/25~7/20. **2026-07-22 footprint 재감사**로 한반도 교집합 0% 씬 다수 확인·제외(일본/중국 방향). RTC+GTC 끝난 7씬은 `excluded_china_japan/`로 분리. GTC 완료분은 배치 종료 후 `archive_gtc.ps1`로 `downloads/gtc/`로 이동 예정. 상세 [SCENE_FOOTPRINT_REAUDIT_KR.md](SCENE_FOOTPRINT_REAUDIT_KR.md)·[GTC_RTC_PROCESSING_LOG_KR.md](GTC_RTC_PROCESSING_LOG_KR.md) |
 | SLC (`sentinel1/` → **D:로 이동**) | 14 / 14 완료 | 6 / 6 완료 (pre-event만) | F: 용량 확보를 위해 `D:\06_SAR_system_archive\sentinel1`로 이동, 기존 경로에 junction 연결(스크립트 영향 없음). post-event SLC는 보류 중 |
 | baseline (pre-event) | — | **v3 완료 (7/21)** | 컷오프 7/3 + 7/4·7/6·7/7 빈틈메우기(북한 커버리지 확장). baseline 수체 6,308 km² |
 | 신규 침수 탐지 | — | **v3 8개 날짜 + 동일궤도 3쌍 완료** | v3: 7/4·7/7·7/13~16·7/18·7/19. 동일궤도: 7/13↔7/1·7/18↔7/6·7/19↔6/25. [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) |
-| 단일시기 수체 지도 | — | 6/25~7/19 전 날짜 완료 | baseline 무관 `flood_water_total_<날짜>.tif` (변화 아닌 상태) |
+| 단일시기 수체 지도 | — | 6/25~7/20 전 날짜 완료 | baseline 무관 `flood_water_total_<날짜>.tif` (변화 아닌 상태, 고정 -16dB). **Otsu판(궤도별 18그룹)**: `water_otsu/flood_water_total_<날짜>_o<궤도>.tif` — 타일기반 Otsu 자동임계값([OTSU_SPLIT_BASED_KR.md](OTSU_SPLIT_BASED_KR.md)), 면적 [WATER_AREA_KR.md](WATER_AREA_KR.md) |
+| 신규 촬영 감시 | — | baseline 등록 완료(7/22) | STAC 폴링으로 한반도 신규 S1 알림. [SCENE_MONITOR_KR.md](SCENE_MONITOR_KR.md) |
 
-- **홍수 침수 시간선(v3)**: 7/8 당일 저녁 침수 최초 검출, 7/14~15 조합에서
-  **남한 154.1 km²(보수적)** 최대 관측 — 상세는 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md).
+- **홍수 침수 시간선(v3)**: 7/14~15 조합에서 **남한 154.1 km²(보수적)** 최대
+  관측 — 상세는 [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md). (**⚠️ 2026-07-22
+  정정**: 기존에 "7/8 당일 저녁 침수 최초 검출"로 소개했던 7/8·7/10 수치는
+  footprint 재감사 결과 물 픽셀이 100% 바다인 아티팩트로 확정돼 무효화됨 —
+  [SCENE_FOOTPRINT_REAUDIT_KR.md](SCENE_FOOTPRINT_REAUDIT_KR.md).)
 - **⚠️ 북한 침수는 정량화 불가**: v3(322/419/468)와 동일궤도 정공법
   (190/254/465)이 크게 다르고, 홍수 전(7/4·7/7)에도 검출됨. 근본 원인은
   **마른 baseline 부재** — SPN 북한 날씨 대조 결과 baseline 후보 6/25·7/1·7/6
@@ -283,3 +311,9 @@ S1A는 **2026-06-29부로 12년 운영을 마치고 퇴역**했습니다
   vs 방식 B(SNAPISTA/gpt), esa-snappy-master 전체 레퍼런스
 - [TERRAIN_AUX_DATA_KR.md](TERRAIN_AUX_DATA_KR.md) — HAND 개념·다운로드·활용,
   NGII 5m DEM의 External DEM 사용법, DEM 비교 방법론
+- [OTSU_SPLIT_BASED_KR.md](OTSU_SPLIT_BASED_KR.md) — 궤도별·날짜별 수체 지도의
+  타일기반 Otsu 자동임계값 방법론·레퍼런스(Otsu 1979, Martinis 2009, Chini 2017)
+- [WATER_AREA_KR.md](WATER_AREA_KR.md) — 궤도별·날짜별 수체 면적(pixel_perrow),
+  픽셀 vs 폴리곤 면적 산출 방식
+- [SCENE_MONITOR_KR.md](SCENE_MONITOR_KR.md) — 한반도 신규 Sentinel-1 촬영 자동
+  감시와 윈도우 백그라운드(작업 스케줄러 등) 설정

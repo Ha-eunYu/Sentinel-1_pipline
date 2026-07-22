@@ -263,7 +263,7 @@ def main() -> None:
     print(f"입력 SLC: {slc_path}")
 
     # 홍수 AOI 주변만 처리 (전체 씬을 처리하려면 aoi_wkt=None으로)
-    aoi_wkt = aoi_wkt_from_geojson(Path(__file__).resolve().parent / "Korea_flood_AOI.geojson")
+    aoi_wkt = aoi_wkt_from_geojson(Path(__file__).resolve().parent / "geojson" / "Korea_flood_AOI.geojson")
     print(f"AOI 서브셋: {aoi_wkt}")
 
     graph = build_rtc_graph(slc_path, out_dir="downloads/rtc", aoi_wkt=aoi_wkt)

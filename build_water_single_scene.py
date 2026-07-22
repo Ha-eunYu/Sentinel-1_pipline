@@ -33,11 +33,13 @@ NODATA_U8 = 255
 CHUNK_ROWS = 512
 
 
-def scene_output_name(scene_path: Path) -> str:
-    # "..._<4자리ID>_COG_rtc_db.tif" -> "<4자리ID>.tif". 매칭 안 되면 stem 그대로.
+def scene_output_name(scene_path: Path, db_threshold: float) -> str:
+    # "..._<4자리ID>_COG_rtc_db.tif" -> "<4자리ID>_<임계값>.tif" (매칭 안 되면 stem).
+    # 임계값을 파일명에 넣어 서로 다른 dB로 돌린 결과가 덮어써지지 않게 한다.
+    # ':g'로 -11.0 -> "-11", -11.5 -> "-11.5"처럼 불필요한 소수점을 없앤다.
     m = re.search(r"_([0-9A-Fa-f]{4})_COG_rtc_db$", scene_path.stem)
     tag = m.group(1) if m else scene_path.stem
-    return f"{tag}.tif"
+    return f"{tag}_{db_threshold:g}.tif"
 
 
 def build_single_scene_water(scene_path: Path, db_threshold: float) -> Path:
@@ -53,7 +55,7 @@ def build_single_scene_water(scene_path: Path, db_threshold: float) -> Path:
         )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = OUT_DIR / scene_output_name(scene_path)
+    out_path = OUT_DIR / scene_output_name(scene_path, db_threshold)
 
     with rasterio.open(scene_path) as src:
         profile = {

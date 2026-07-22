@@ -44,7 +44,7 @@ from rasterio.warp import reproject
 PROJECT_DIR = Path(__file__).resolve().parent
 RTC_GRD_DIR = PROJECT_DIR / "downloads" / "rtc_grd"
 OUT_DIR = PROJECT_DIR / "downloads" / "water"
-AOI_GEOJSON = PROJECT_DIR / "Korea_flood_AOI.geojson"
+AOI_GEOJSON = PROJECT_DIR / "geojson" / "Korea_flood_AOI.geojson"
 
 BASELINE_VRT = RTC_GRD_DIR / "s1_rtc_db_composite_latest_pre.vrt"
 POST_VRT = RTC_GRD_DIR / "s1_rtc_db_mosaic_20260713.vrt"

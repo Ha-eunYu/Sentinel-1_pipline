@@ -21,9 +21,12 @@ AOI 정밀 분석은 SLC RTC(prepro_gpt.py)를 사용.
   - 입력이 HDD(F: 등)에 있으면 SSD(C:)로 복사 후 그 경로로 실행하면 더 빠르다.
 
 실행:
-    conda run -n s1_snappy python prepro_grd_gpt.py [GRD.zip 경로] [--aoi]
+    conda run -n s1_snappy python prepro_grd_gpt.py [GRD.zip 경로] [--aoi] [--gtc]
     # 경로 생략 시 downloads/sentinel1_grd 의 첫 zip
     # --aoi 를 붙이면 전체 씬 대신 Korea_flood_AOI 주변만 처리
+    # --gtc 를 붙이면 Terrain-Flattening을 생략한 GTC(Sigma0, 지오코딩만)로 처리
+    #   (파일명 접미사 _gtc_db, 같은 씬의 _rtc_db와 나란히 저장되어 육안 비교용.
+    #   왜 RTC를 쓰는지는 RTC_VS_GTC_KR.md 참고)
 """
 
 from __future__ import annotations
@@ -207,9 +210,143 @@ def build_grd_rtc_graph(
     return g
 
 
+def build_grd_gtc_graph(
+    grd_path: str | Path,
+    out_dir: str | Path,
+    *,
+    polarization: str = "VV",
+    dem_name: str = "Copernicus 30m Global DEM",
+    external_dem_file: str | Path | None = None,
+    external_dem_nodata: float = -9999.0,
+    external_dem_apply_egm: bool = True,
+    out_tag: str = "",
+    pixel_spacing_m: float = 10.0,
+    apply_border_noise_removal: bool = False,
+    apply_speckle_filter: bool = True,
+    speckle_filter_name: str = "Refined Lee",
+    aoi_wkt: str | None = None,
+) -> Graph:
+    """Sentinel-1 IW GRD 한 장을 GTC(Sigma0, 지형 평탄화 없음) dB GeoTIFF로 만드는 gpt 그래프.
+
+    RTC(build_grd_rtc_graph)와 비교용. 차이는 딱 하나: Terrain-Flattening을
+    건너뛴다. 대신 Calibration에서 Sigma0를 바로 출력해 Terrain-Correction으로
+    넘긴다 (RTC는 Terrain-Flattening 입력을 위해 Beta0를 출력). 즉 기하 보정
+    (지오코딩)만 하고, 지형 경사·향에 따른 밝기 왜곡(RTC가 잡아주는 부분)은
+    그대로 남는다 — RTC가 왜 필요한지 육안으로 보여주기 위한 대조군.
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    dem_params = _terrain_dem_params(
+        dem_name, external_dem_file, external_dem_nodata, external_dem_apply_egm
+    )
+
+    g = Graph()
+
+    g.add_node(Operator("Read", file=str(grd_path)), node_id="Read")
+
+    g.add_node(
+        Operator(
+            "Apply-Orbit-File",
+            orbitType="Sentinel Precise (Auto Download)",
+            polyDegree="3",
+            continueOnFail="false",
+        ),
+        node_id="Apply-Orbit-File",
+        source="Read",
+    )
+
+    prev = "Apply-Orbit-File"
+
+    if apply_border_noise_removal:
+        g.add_node(
+            Operator("Remove-GRD-Border-Noise", selectedPolarisations=polarization),
+            node_id="Remove-GRD-Border-Noise",
+            source=prev,
+        )
+        prev = "Remove-GRD-Border-Noise"
+
+    g.add_node(
+        Operator(
+            "ThermalNoiseRemoval",
+            selectedPolarisations=polarization,
+            removeThermalNoise="true",
+        ),
+        node_id="ThermalNoiseRemoval",
+        source=prev,
+    )
+
+    # GTC는 Terrain-Flattening이 없으므로 Beta0가 아니라 Sigma0를 바로 출력
+    # (표준 지오코딩 산출물의 관례적 캘리브레이션 기준)
+    g.add_node(
+        Operator(
+            "Calibration",
+            selectedPolarisations=polarization,
+            outputBetaBand="false",
+            outputSigmaBand="true",
+            outputGammaBand="false",
+            outputImageScaleInDb="false",
+        ),
+        node_id="Calibration",
+        source="ThermalNoiseRemoval",
+    )
+
+    prev = "Calibration"
+
+    if aoi_wkt:
+        g.add_node(
+            Operator("Subset", geoRegion=aoi_wkt, copyMetadata="true"),
+            node_id="Subset",
+            source=prev,
+        )
+        prev = "Subset"
+
+    if apply_speckle_filter:
+        g.add_node(
+            Operator("Speckle-Filter", filter=speckle_filter_name),
+            node_id="Speckle-Filter",
+            source=prev,
+        )
+        prev = "Speckle-Filter"
+
+    # Terrain-Flattening 없이 바로 Terrain-Correction (기하 보정=지오코딩만)
+    g.add_node(
+        Operator(
+            "Terrain-Correction",
+            pixelSpacingInMeter=str(float(pixel_spacing_m)),
+            imgResamplingMethod="BILINEAR_INTERPOLATION",
+            demResamplingMethod="BILINEAR_INTERPOLATION",
+            saveSelectedSourceBand="true",
+            **dem_params,
+        ),
+        node_id="Terrain-Correction",
+        source=prev,
+    )
+
+    g.add_node(
+        Operator("LinearToFromdB"),
+        node_id="LinearToFromdB",
+        source="Terrain-Correction",
+    )
+
+    g.add_node(
+        Operator(
+            "Write",
+            file=str(out_dir / f"{Path(grd_path).stem}_gtc_db{out_tag}.tif"),
+            formatName="GeoTIFF-BigTIFF",
+        ),
+        node_id="Write-dB",
+        source="LinearToFromdB",
+    )
+
+    return g
+
+
 def main() -> None:
     raw_args = sys.argv[1:]
     use_aoi = "--aoi" in raw_args
+    use_gtc = "--gtc" in raw_args
+    raw_args = [a for a in raw_args if a != "--gtc"]
 
     # --dem <경로>: Copernicus 30m 대신 로컬 DEM(External DEM) 사용
     external_dem = None
@@ -240,7 +377,7 @@ def main() -> None:
 
     aoi_wkt = None
     if use_aoi:
-        aoi_wkt = aoi_wkt_from_geojson(Path(__file__).resolve().parent / "Korea_flood_AOI.geojson")
+        aoi_wkt = aoi_wkt_from_geojson(Path(__file__).resolve().parent / "geojson" / "Korea_flood_AOI.geojson")
         print(f"AOI 서브셋: {aoi_wkt}")
     else:
         print("전체 씬 처리 (AOI 서브셋을 쓰려면 --aoi)")
@@ -250,7 +387,11 @@ def main() -> None:
         out_tag = "_ngiidem"
         print(f"External DEM 사용: {external_dem} (산출물 접미사 {out_tag})")
 
-    graph = build_grd_rtc_graph(
+    graph_builder = build_grd_gtc_graph if use_gtc else build_grd_rtc_graph
+    if use_gtc:
+        print("GTC 모드 (Terrain-Flattening 생략, Sigma0 기준 지오코딩만)")
+
+    graph = graph_builder(
         grd_path,
         out_dir="downloads/rtc_grd",
         external_dem_file=external_dem,
@@ -260,7 +401,8 @@ def main() -> None:
     graph.view()
 
     # SNAP Desktop(Graph Builder)이나 gpt CLI에서 그대로 쓸 수 있게 XML로도 저장
-    graph_xml = Path(__file__).resolve().parent / "graphs" / "s1_grd_to_rtc_db.xml"
+    graph_xml_name = "s1_grd_to_gtc_db.xml" if use_gtc else "s1_grd_to_rtc_db.xml"
+    graph_xml = Path(__file__).resolve().parent / "graphs" / graph_xml_name
     graph_xml.parent.mkdir(parents=True, exist_ok=True)
     graph.save_graph(str(graph_xml))
     print(f"그래프 XML 저장: {graph_xml}")

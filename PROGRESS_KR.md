@@ -1,4 +1,4 @@
-# 작업 진행 현황 (2026-07-20 기준)
+# 작업 진행 현황 (2026-07-21 기준)
 
 2026년 7월 한국 홍수(홍수일 7/8) 모니터링 파이프라인의 작업 이력·데이터
 인벤토리·다음 할 일 정리. 분석 범위는 충청권 AOI에서 **한반도 전체(북한
@@ -213,7 +213,8 @@
 4. **침수 시간선 완성**: 7/8 당일 저녁 1.64km² 최초 검출(같은 궤도 6/26 FAA4
    대비), 7/10 69.06km², 7/16 강원 동부 97.87km²(6/27 S1A 대비, v2로 비교
    가능해짐). 7/11은 pre-event 동일궤도 미촬영으로 비교 불가 확정.
-   상세: [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md).
+   상세: [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md). **⚠️ 2026-07-22 정정**:
+   이 중 7/8·7/10 값은 footprint 재감사로 무효 확정(아래 7/22 항목).
 5. 7/19 신규 2씬(0B91/3194) 발견·다운로드. README/TODO/PROGRESS 문서 갱신.
 6. **NAS 업로드 후 로컬 정리 운영 체계화**: 사용자가 GRD 원본을
    `X:\02_Analysis\20260708_Flood\Sentinel-1`에 업로드. 바이트 단위 크기
@@ -267,6 +268,62 @@
    것만 제외(bbox·대표점 방식은 부정확). 7/20 신규 패스(궤도 008632)
    7프레임 다운로드·RTC(392D 등, 북한 함경~제주 남북 스와스). 코페르니쿠스
    브라우저에 보인 비-COG(84AC 등) 제품은 이미 받은 COG의 중복이라 무시.
+
+### 7/21 (계속) — 신규 씬 확인, X드라이브 아카이브 병합
+
+1. **신규 촬영 씬 재확인**: 갱신된 `Korea.geojson`(단일 폴리곤, 사용자가 이
+   시점에 재작성)으로 CDSE STAC을 다시 조회 — 7/20 21:32 UTC(orbit 008632,
+   74BD) 이후로 새로 게시된 씬 없음. 기존에 이미 받은 것과 동일.
+   덧붙여 **93DD는 갱신된 `Korea.geojson`과 더 이상 교차하지 않음**(같은
+   008632 배치의 나머지 6프레임은 그대로 걸림) — AOI가 좁아진 영향으로 보이며,
+   93DD 자체는 이미 다운로드·분류 완료 상태라 재검토 필요는 없음. 향후 이
+   AOI로 신규 검색 시 서쪽 경계 프레임이 누락될 수 있으니 참고.
+2. **X드라이브 기존 아카이브 병합 확인**: 사용자가 보유한 X드라이브(원격
+   서버가 아니라 로컬/네트워크 마운트 볼륨, SSH 접근 불가·비밀번호 미보유)의
+   GRD zip 75개를 `wsl rsync --ignore-existing`로 `downloads/sentinel1_grd/`에
+   병합 중. tree.txt 스냅샷 대조 결과 X드라이브에는 있고 로컬엔 없는 파일
+   59개 확인(6/26~7/18 구간 다수, 예: 6/26 A392~BE31 8프레임, 7/13 F45C~1A5A
+   6프레임 등) — 이번 프로젝트에서 개별 STAC 다운로드로는 못 받았던 프레임들이
+   X드라이브 아카이브에는 이미 있었던 것. rsync 완료 후 로컬 인벤토리 재확인
+   필요. F드라이브 여유공간(524.7GB)은 충분.
+
+### 7/22 — footprint 재감사, FLOOD_TIMELINE_KR.md 정정, RTC vs GTC 비교
+
+1. **RTC 필요성 문서화 + GTC 비교 산출**: [RTC_VS_GTC_KR.md](RTC_VS_GTC_KR.md)
+   신규 작성 — Terrain-Flattening 유무 차이를 설명하고 `prepro_grd_gpt.py`에
+   `build_grd_gtc_graph`/`--gtc` 옵션, `batch_grd_gtc.py` 신규 추가. 씬당
+   GTC가 RTC의 약 1/3 시간(TF가 씬당 60~70% 차지)으로 확인됨.
+2. **NAS rsync로 China/Japan 씬 재유입 → footprint 재감사로 확대**: X드라이브
+   rsync가 기존에 제외했던 `CDFD`·`1CE4`·`F598`·`F05D`를 다시 끌어옴 →
+   전체 79개 zip을 CDSE STAC에서 재조회해 `Korea_Peninsula.geojson` 교집합을
+   다시 계산. 결과 **0% 겹침 씬이 훨씬 많음**을 발견(`FAA4`·`3167`·`E067`·
+   `4C8A`·`9919`·`D440`·`88AF`·`E215`·`3883`·`B5A5`·`D298`·`3191`·`4C7C` 등).
+   상세: [SCENE_FOOTPRINT_REAUDIT_KR.md](SCENE_FOOTPRINT_REAUDIT_KR.md).
+3. **FLOOD_TIMELINE_KR.md 핵심 정정**: 위 0% 씬 중 `FAA4`/`3167`(7/8)과
+   `E067`·`4C8A`(7/10)가 실제 발표 수치(1.64km², 69.06km²)의 근거였음을
+   발견 — `flood_water_relaxed_*.tif`의 물 픽셀 좌표를 직접 검증한 결과
+   **100% 한반도 밖(바다)**으로 확정, 두 값 모두 무효 처리. "7/8 당일 위성으로
+   침수 확인"이라는 핵심 주장의 근거가 사라짐. 7/17 행(`D298`·`3191`·`4C7C`,
+   97.38km²)도 같은 0% 문제가 있으나 저장 파일이 다른 궤도와 섞인 합성본이라
+   격리 재계산 전까지 ⚠️미확정으로 표시. [FLOOD_NORTH_KOREA_KR.md](FLOOD_NORTH_KOREA_KR.md)
+   궤도 표도 같이 정정.
+4. **GTC 배치 정리**: 미처리 0% 씬 13개(`4685`·`A8F8`·`BCBF`·`C7AD`·`DAF9`·
+   `E067`·`4C8A`·`4D62`·`5C3C`·`6668`·`F45C`·`754B`) zip 삭제 후 배치
+   재시작(79→66개 대상). 이미 RTC/GTC 끝난 0% 씬(`FAA4`·`9919`·`D440`·`88AF`·
+   `E215`·`3883`·`B5A5` 7개)은 `downloads/excluded_china_japan/`으로 분리 보관.
+5. **RTC vs GTC 대조 처리**: `prepro_grd_gpt.py`에 `build_grd_gtc_graph`(TF 생략,
+   Sigma0) + `--gtc` 옵션, `batch_grd_gtc.py` 신규. 육안 비교용 GTC를 전체
+   한반도 씬에 배치 실행 중. 처리 이력·인벤토리:
+   [GTC_RTC_PROCESSING_LOG_KR.md](GTC_RTC_PROCESSING_LOG_KR.md), 개념 설명:
+   [RTC_VS_GTC_KR.md](RTC_VS_GTC_KR.md).
+6. **소스 zip 정리**: RTC·GTC 둘 다 끝난 zip 38개 삭제(산출 tif 보존, NAS에서
+   재취득 가능). GTC 대기 중(RTC만 완료) zip은 배치가 써야 하므로 보존.
+7. **루트 디렉터리 정리**: 파일 종류별 폴더 분리 — `geojson/`(5개, 코드
+   참조 경로도 `geojson/` 하위로 일괄 갱신)·`kmz/`(2)·`env/`(yml 2)·
+   `data/`(csv·tree.txt·graphs.zip). `.py`와 마크다운은 루트 유지(사용자 결정).
+   `Korea_Peninsula.geojson`은 IDE가 핸들을 잡고 있어 루트 원본이 안 지워짐 —
+   geojson/에 복사본 있고 코드는 그쪽을 참조하므로 기능 무관, 잠금 풀리면
+   루트 것 삭제할 것.
 
 ## 다음 할 일
 

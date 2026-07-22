@@ -108,7 +108,7 @@ def main() -> None:
     #     polarization=None,
     # )
 
-    korea_geojson = Path(__file__).resolve().parent / "South_Korea.geojson"
+    korea_geojson = Path(__file__).resolve().parent / "geojson" / "Korea.geojson"
     korea_geom = load_geojson_geometry(korea_geojson)
 
 
@@ -127,7 +127,7 @@ def main() -> None:
     )
 
     targets = [
-        ("Korea_flood", "2026-07-08T18:30:00+09:00"),  # KST 촬영 시각
+        ("Korea_flood", "2026-07-20T18:30:00+09:00"),  # KST 촬영 시각
         # ("Jeddah_flood", "2022-11-24"),
         # ("ICEYE_ref", "2021-01-21"),
         # ("UMBRA_ref", "2024-07-17"),
@@ -146,8 +146,8 @@ def main() -> None:
 
     for sensor, date_str in targets:
         print(f"\n=== {sensor} | target={date_str} | collection={cfg.collection} ===")
-        res = list_s1_items_for_date(client, date_str, cfg, k=cfg.max_items)
-        # res = list_s1_items_for_date(client, date_str, cfg, k=10)
+        # res = list_s1_items_for_date(client, date_str, cfg, k=cfg.max_items)
+        res = list_s1_items_for_date(client, date_str, cfg, k=2)  # 테스트용으로 1개만 검색
         results["targets"].append({"sensor": sensor, **res})
 
         if res["status"] != "ok":

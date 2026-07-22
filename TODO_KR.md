@@ -1,4 +1,4 @@
-# TODO (2026-07-20 갱신)
+# TODO (2026-07-21 갱신)
 
 다른 컴퓨터에서 이어서 작업할 때 참고하는 실행 목록. 배경·근거는
 [CODE_REVIEW_KR.md](CODE_REVIEW_KR.md)(코드 품질)와 [PROGRESS_KR.md](PROGRESS_KR.md)
@@ -31,6 +31,10 @@
       한반도 실경계와 **0% 겹침 확인된 것만** 제외: `CDFD`(6/30)·`1CE4`(7/12,
       같은 궤도, 서해 원해·중국), `F598`·`F05D`(7/4, 대한해협~일본 규슈).
       제외 씬은 zip을 삭제해 RTC 큐에서 자동 스킵되게 함.
+      **주의(7/22)**: X드라이브(NAS) `rsync --ignore-existing`은 로컬에서 지운
+      파일도 원본엔 남아있어 재실행 때마다 이 4개를 다시 끌고 옴 — rsync
+      돌릴 때마다 `downloads/sentinel1_grd/`에 이 4개(CDFD/1CE4/F598/F05D)가
+      재유입됐는지 확인하고 있으면 삭제할 것.
 
 - [x] **한반도 전체(북한 포함) GRD 일괄 수집** (7/19) — `Korea_Peninsula.geojson`
       bbox로 6/25~7/18 재검색, 신규 44개 다운로드 → 총 73씬. 용량 확보를 위해
@@ -75,8 +79,24 @@
       수집하거나, Sentinel-2 광학·수위계로 교차검증해야 북한 정량화 가능.
 - [ ] (선택) 7/16 강원 동부 97km² 검출(남한)의 교차검증 — Sentinel-2 광학 또는
       공식 피해현황(kmz)과 대조.
-- [ ] **7/20 패스(궤도 008632, CE47·0CEF·DD29·F314·74BD·93DD) RTC 마무리** —
-      392D 완료, 나머지 진행 중. 완료 후 `flood_water_total_20260720.tif` 생성.
+- [x] **7/20 패스(궤도 008632, CE47·0CEF·DD29·F314·74BD·93DD) RTC 완료** (7/21) —
+      392D 포함 7프레임 전부 RTC 완료. `flood_water_total_20260720.tif`는
+      아직 미생성 (필요 시 `build_water_per_date.py 20260720`).
+- [x] **신규 촬영 씬 재확인** (7/21) — 갱신된 `Korea.geojson`으로 CDSE STAC
+      재조회, 7/20 21:32 UTC(74BD) 이후 신규 게시 없음 확인. 93DD가 갱신된
+      AOI와 더 이상 안 겹치는 점 발견(경계가 좁아짐, 이미 받은 93DD 자체는
+      영향 없음) — 다음 신규 검색 때 서쪽 경계 프레임 누락 여부 주의.
+- [ ] **X드라이브(NAS) zip 아카이브 병합** — `wsl rsync --ignore-existing`로
+      X드라이브 GRD zip 75개 중 로컬에 없던 59개를 `sentinel1_grd/`로 병합
+      진행 중(F: 여유공간 524.7GB, 문제없음). 완료 후 로컬 인벤토리 재확인.
+- [x] **footprint 재감사·FLOOD_TIMELINE_KR.md 정정** (7/22) — NAS rsync로
+      제외 씬 재유입을 계기로 전체 zip footprint 재검증, 7/8·7/10 발표
+      수치가 100% 바다 아티팩트임을 확정하고 문서 정정. 상세:
+      [SCENE_FOOTPRINT_REAUDIT_KR.md](SCENE_FOOTPRINT_REAUDIT_KR.md).
+- [ ] **7/17행(`D298`·`3191`·`4C7C`, 97.38km²) 격리 재계산** — 현재 저장된
+      `flood_water_relaxed_20260716.tif`는 다른 궤도와 섞인 합성본이라 이
+      3씬만의 값인지 확인 불가. `detect_flood_grd_v2.py --baseline --tag`로
+      이 3씬만 모자이크해 재계산 필요(같은 궤도 003704 pre-event 짝 확인부터).
 
 ## P1(구) — post-event 영상 (7/14 시점 기록)
 

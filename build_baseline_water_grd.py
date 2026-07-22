@@ -30,7 +30,7 @@ PROJECT_DIR = Path(__file__).resolve().parent
 RTC_GRD_DIR = PROJECT_DIR / "downloads" / "rtc_grd"
 HAND_VRT = PROJECT_DIR / "downloads" / "hand" / "hand_aoi.vrt"
 OUT_DIR = PROJECT_DIR / "downloads" / "water"
-AOI_GEOJSON = PROJECT_DIR / "Korea_flood_AOI.geojson"
+AOI_GEOJSON = PROJECT_DIR / "geojson" / "Korea_flood_AOI.geojson"
 
 AOI_MARGIN_DEG = 0.1
 DB_THRESHOLD_DEFAULT = -16.0

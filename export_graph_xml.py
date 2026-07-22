@@ -46,7 +46,7 @@ def main() -> None:
 
     aoi_wkt = None
     if use_aoi:
-        aoi_wkt = aoi_wkt_from_geojson(PROJECT_DIR / "Korea_flood_AOI.geojson")
+        aoi_wkt = aoi_wkt_from_geojson(PROJECT_DIR / "geojson" / "Korea_flood_AOI.geojson")
 
     graph = build_rtc_graph(
         slc_path,

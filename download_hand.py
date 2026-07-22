@@ -28,7 +28,7 @@ from pathlib import Path
 import requests
 
 PROJECT_DIR = Path(__file__).resolve().parent
-AOI_GEOJSON = PROJECT_DIR / "Korea_flood_AOI.geojson"
+AOI_GEOJSON = PROJECT_DIR / "geojson" / "Korea_flood_AOI.geojson"
 OUT_DIR = PROJECT_DIR / "downloads" / "hand"
 MARGIN_DEG = 0.1
 

@@ -10,7 +10,7 @@ SNAP의 Terrain-Flattening / Terrain-Correction external DEM은 WGS84
   2) NoData 값을 지정된 값으로 통일
   3) GeoTIFF로 저장
 
-gdal(gdalwarp, gdalinfo) CLI가 PATH에 있어야 한다 (environment_snappy.yml의
+gdal(gdalwarp, gdalinfo) CLI가 PATH에 있어야 한다 (env/environment_snappy.yml의
 gdal 패키지로 설치됨).
 
 사용 예:

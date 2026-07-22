@@ -108,7 +108,7 @@ def main() -> None:
     #     polarization=None,
     # )
 
-    korea_geojson = Path(__file__).resolve().parent / "South_Korea.geojson"
+    korea_geojson = Path(__file__).resolve().parent / "geojson" / "South_Korea.geojson"
     korea_geom = load_geojson_geometry(korea_geojson)
 
 

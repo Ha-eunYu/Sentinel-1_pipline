@@ -15,7 +15,7 @@ including RTC preprocessing, HAND, water detection, and current data status.)
 git clone <repo-url>
 cd Sentinel-1_pipline
 
-conda env create -f environment.yml
+conda env create -f env/environment.yml
 conda activate s1_pipeline
 
 cp .env.example .env
@@ -40,7 +40,7 @@ the disk-space note.
 ## Setup
 
 ```bash
-conda env create -f environment.yml   # env name: s1_pipeline
+conda env create -f env/environment.yml   # env name: s1_pipeline
 conda activate s1_pipeline
 ```
 

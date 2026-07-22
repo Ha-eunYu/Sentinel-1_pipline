@@ -36,7 +36,7 @@ def main() -> None:
     if not zips:
         raise FileNotFoundError(f"{SLC_DIR} 에 {YEAR_FILTER} 씬 zip이 없습니다.")
 
-    aoi_wkt = aoi_wkt_from_geojson(PROJECT_DIR / "Korea_flood_AOI.geojson")
+    aoi_wkt = aoi_wkt_from_geojson(PROJECT_DIR / "geojson" / "Korea_flood_AOI.geojson")
     print(f"대상 SLC: {len(zips)}개 (AOI 서브셋 적용)")
 
     done, skipped, failed = 0, 0, 0
