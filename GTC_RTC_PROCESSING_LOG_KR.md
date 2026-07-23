@@ -69,8 +69,8 @@ Read → Apply-Orbit-File → ThermalNoiseRemoval → Calibration(Sigma0)
 
 ### 산출물 위치·명명
 
-- 폴더: `downloads/rtc_grd/`
-- 명명: `<씬ID>_rtc_db.tif` / `<씬ID>_gtc_db.tif` (같은 씬이 나란히 저장, 접미사로 구분)
+- 폴더: RTC는 `downloads/rtc_grd/`, **GTC는 `downloads/gtc/`**(2026-07-23 분리 완료, 5절).
+- 명명: `<씬ID>_rtc_db.tif`(rtc_grd) / `<씬ID>_gtc_db.tif`(gtc). 접미사로 구분.
 - 일본/중국 전용(한반도 footprint 0%) 씬은 `downloads/excluded_china_japan/`로 분리 보관(2026-07-22, [SCENE_FOOTPRINT_REAUDIT_KR.md](SCENE_FOOTPRINT_REAUDIT_KR.md)).
 
 ---
@@ -152,17 +152,13 @@ GTC는 **육안 비교 전용**(수체 탐지 미사용, [RTC_VS_GTC_KR.md](RTC_
 - **`excluded_china_japan/`의 GTC 7개**: 감사용 rtc/gtc 짝을 유지하려 **그 폴더에
   그대로 둠**(원하면 `archive_gtc.ps1 -IncludeExcluded`로 함께 이동).
 
-> **⏳ 이동 실행 시점 — 배치 종료 후**: 2026-07-22 기준 `batch_grd_gtc.py`가 아직
-> 실행 중이라 `rtc_grd/`에 GTC를 계속 쓰고 있다. 실행 중에는 이동을 **하지 않는다**
-> (배치가 쓰는 중인 tif는 윈도우 파일 잠금으로 이동이 실패해 건너뛰어지긴 하지만,
-> 배치가 새 GTC를 계속 만들므로 완전 정리가 안 됨). **배치가 끝난 뒤 한 번**
-> 아래를 실행하면 깔끔하게 이동된다(재실행 안전):
+> **✅ 이동 완료 (2026-07-23)**: `batch_grd_gtc.py` 배치가 끝난 뒤
+> `archive_gtc.ps1`을 실행해 `rtc_grd/`의 GTC 산출물 **59개(tif + 사이드카)**를
+> `downloads/gtc/`로 옮겼다(0개 건너뜀). `rtc_grd/`에는 이제 RTC(_rtc_db.tif)만
+> 남는다. `excluded_china_japan/`의 GTC 7개는 감사 짝 유지를 위해 그대로 두었다.
+> 재실행 안전(idempotent)하므로 이후 새 GTC가 생기면 다시 돌리면 된다:
 >
 > ```powershell
 > powershell -ExecutionPolicy Bypass -File archive_gtc.ps1 -WhatIf   # 대상 미리보기
 > powershell -ExecutionPolicy Bypass -File archive_gtc.ps1           # 실제 이동
 > ```
->
-> 이동 후에는 이 문서 1절의 "산출물 위치"(현재 `downloads/rtc_grd/`)와
-> [RTC_VS_GTC_KR.md](RTC_VS_GTC_KR.md) 4절의 392D GTC 경로를 `downloads/gtc/`로
-> 갱신할 것.

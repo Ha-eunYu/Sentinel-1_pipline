@@ -75,7 +75,7 @@ RTC입니다.
 | 파일 | 처리 | 씬 |
 | --- | --- | --- |
 | `downloads/rtc_grd/S1C_IW_GRDH_1SDV_20260720T213054_20260720T213119_008632_01119F_392D_COG_rtc_db.tif` | RTC (기존) | 392D |
-| `downloads/rtc_grd/S1C_IW_GRDH_1SDV_20260720T213054_20260720T213119_008632_01119F_392D_COG_gtc_db.tif` | GTC (신규) | 392D |
+| `downloads/gtc/S1C_IW_GRDH_1SDV_20260720T213054_20260720T213119_008632_01119F_392D_COG_gtc_db.tif` | GTC (2026-07-23 `downloads/gtc/`로 이동) | 392D |
 
 QGIS 등에서 두 파일을 같은 스트레치(예: -20~0 dB, 그레이스케일)로 열어 산간
 지형(함경남도~강원도 접경 산악 구간)을 확대해 보면, GTC 쪽에서 능선을 따라
