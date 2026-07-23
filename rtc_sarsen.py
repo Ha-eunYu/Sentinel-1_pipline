@@ -252,11 +252,15 @@ def main() -> None:
         out_linear = work_dir / f"{stem}_{'gtc' if args.gtc else 'rtc'}_linear.tif"
         out_db = args.out_dir / f"{stem}_{suffix}.tif"
         print(f"[4/5] sarsen 지형보정 ({'GTC' if args.gtc else 'RTC γ0 ' + args.radiometry})")
+        import time as _time
+        _t0 = _time.perf_counter()
         run_terrain_correction(safe_dir, dem_ellip, out_linear, args.pol, args.gtc, args.radiometry)
 
         print(f"[5/5] dB 변환 -> {out_db.name}")
         linear_to_db(out_linear, out_db)
-        print(f"완료: {out_db}")
+        _dt = _time.perf_counter() - _t0
+        print(f"완료: {out_db}  (지형보정+dB {_dt/60:.1f}분)")
+        print(f"PROCESS_SECONDS={_dt:.2f}")
 
     finally:
         if args.keep_temp:
