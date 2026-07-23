@@ -108,15 +108,17 @@ def main() -> None:
     #     polarization=None,
     # )
 
-    korea_geojson = Path(__file__).resolve().parent / "geojson" / "Korea.geojson"
-    korea_geom = load_geojson_geometry(korea_geojson)
-
-
+    # 검색 AOI: 느슨한 bbox(제주 포함, 여유 있게). 정확한 한반도 판정은
+    # list_s1_items_for_date의 footprint 필터(Korea_Peninsula.geojson 실경계
+    # 대조)가 한다 — 2026-07-23: 기존 Korea.geojson은 남쪽 경계가 34.57°N이라
+    # 제주(33.1~33.6°N)가 빠져 있어, 제주 인근만 겹치는 정당한 프레임(예: 93DD)
+    # 이 검색 자체에서 통째로 누락되는 버그가 있었다. bbox를 넓혀 이 문제를
+    # 없애고, "중국/일본 전용" 배제는 뒤 단계의 정밀 footprint 필터에 맡긴다.
+    KOREA_SEARCH_BBOX = [123.0, 32.5, 131.5, 43.5]
 
     cfg = S1SearchConfig(
-        # bbox=korea_bbox,
-        bbox=None,
-        intersects_geojson=korea_geom,
+        bbox=KOREA_SEARCH_BBOX,
+        intersects_geojson=None,
         collection="sentinel-1-grd",
         window_days=15,
         max_items=200,
@@ -128,8 +130,11 @@ def main() -> None:
 
     # 받고 싶은 날짜만 지정하면 그 날짜에 가까운 촬영일 순으로 내려받는다.
     # (라벨, "YYYY-MM-DD"). 시각은 필요 없다 — 날짜 근접도로 정렬한다.
+    # 2026-07-23: 7/1(6프레임)·7/20(7프레임) zip이 RTC 완료 후 삭제 정책으로
+    # 지워져 있어 Frost 재처리 대상에서 빠짐 -> 재다운로드.
     targets = [
-        ("Korea_flood", "2026-07-20"),
+        ("Korea_flood_0701", "2026-07-01"),
+        ("Korea_flood_0720", "2026-07-20"),
     ]
 
     # 유일한 설정: 이 날짜 근접순으로 최대 몇 개를 내려받을지. None = 후보 전부.

@@ -108,15 +108,16 @@ def main() -> None:
     #     polarization=None,
     # )
 
-    korea_geojson = Path(__file__).resolve().parent / "geojson" / "South_Korea.geojson"
-    korea_geom = load_geojson_geometry(korea_geojson)
-
-
+    # 검색 AOI: 느슨한 bbox(제주 포함, 여유 있게). 정확한 한반도 판정은
+    # list_s1_items_for_date의 footprint 필터(Korea_Peninsula.geojson 실경계
+    # 대조)가 한다 — 기존 South_Korea.geojson은 제주(33.1~33.6°N)와 북한을 빼먹어
+    # 경계 프레임이 검색 자체에서 누락되는 문제가 있었다(main_s1_list_grd.py와
+    # 동일한 원인, 2026-07-23).
+    KOREA_SEARCH_BBOX = [123.0, 32.5, 131.5, 43.5]
 
     cfg = S1SearchConfig(
-        # bbox=korea_bbox,
-        bbox=None,
-        intersects_geojson=korea_geom,
+        bbox=KOREA_SEARCH_BBOX,
+        intersects_geojson=None,
         collection="sentinel-1-slc",
         window_days=15,
         max_items=200,

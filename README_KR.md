@@ -273,6 +273,25 @@ S1A는 **2026-06-29부로 12년 운영을 마치고 퇴역**했습니다
 `None`) 해당 날짜의 프레임이 통째로 들어옵니다. 프레임 현황은
 `export_frames_geojson.py` 결과를 QGIS로 확인.
 
+### 중국·일본 등 비한반도 프레임 자동 제외 (footprint 필터, 2026-07-23)
+
+검색 AOI는 이제 **느슨한 bbox**([123.0, 32.5, 131.5, 43.5], 제주 포함 여유
+있게)만 쓰고, `stac/search_s1.py`의 `list_s1_items_for_date`가 검색 결과 각
+프레임의 **실제 footprint(item.geometry)를 `geojson/Korea_Peninsula.geojson`
+(NK+SK 실경계)와 대조**해 교집합이 전혀 없는(=중국/일본/공해 전용) 프레임을
+자동으로 제외합니다(`exclude_non_korea=True` 기본, shapely 사용).
+
+이전에는 검색 AOI로 `Korea.geojson`(남쪽 경계 34.57°N, **제주 미포함**)을
+직접 `intersects`로 써서, 그 경계를 넘는 프레임이 **검색 자체에서 통째로
+누락**되는 문제가 있었다(예: 7/20 `93DD`, 제주 인근 5.27% 겹침에도 누락).
+이제는 넉넉한 bbox로 먼저 다 받아온 뒤 정밀 footprint로만 걸러내므로, 경계에
+걸친 정당한 프레임을 놓치지 않으면서 진짜 비한반도 프레임만 뺄 수 있다.
+
+이 자동 필터는 [SCENE_FOOTPRINT_REAUDIT_KR.md](SCENE_FOOTPRINT_REAUDIT_KR.md)
+가 수동으로 찾아냈던 비한반도 씬(3167·FAA4·9919·D440·88AF·E215·3883·B5A5·
+D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 로그에
+`[footprint 제외] ...`로 남는다.
+
 ### RTC 처리 파라미터 (prepro_gpt.py / prepro_grd_gpt.py)
 
 - DEM: 기본 `Copernicus 30m Global DEM` (자동 다운로드).
