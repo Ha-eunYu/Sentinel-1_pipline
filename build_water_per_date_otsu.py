@@ -40,9 +40,18 @@ build_water_per_date.py 와의 차이
   otsu_thresholds.csv                        그룹별 Otsu 임계값·면적 로그
 
 실행:
-    conda run -n s1_snappy python build_water_per_date_otsu.py            # 전체 날짜
+    conda run -n s1_snappy python build_water_per_date_otsu.py            # 전체 날짜 (RTC, 기본)
     conda run -n s1_snappy python build_water_per_date_otsu.py --dates 20260703,20260714
     conda run -n s1_snappy python build_water_per_date_otsu.py --tile 1024 --pctl 95
+
+다른 입력소스(GTC 비교, Frost 재처리본 등)에도 재사용 가능(2026-07-23,
+--source-dir/--suffix/--out-dir/--out-suffix로 일반화):
+    # GTC(Sigma0, Terrain-Flattening 없음)로 만들어 RTC와 비교 -> RTC_VS_GTC_KR.md
+    conda run -n s1_snappy python build_water_per_date_otsu.py \\
+        --source-dir downloads/gtc --suffix gtc_db --out-dir downloads/water_otsu_gtc
+    # Frost로 재처리한 RTC -> 기존 water_otsu에 파일명만 구분해서 저장
+    conda run -n s1_snappy python build_water_per_date_otsu.py \\
+        --source-dir downloads/rtc_grd_frost --suffix rtc_db --out-suffix _frost
 """
 
 from __future__ import annotations
@@ -61,8 +70,9 @@ from rasterio.windows import Window
 from build_baseline_composite_grd import RTC_GRD_DIR, scene_date
 
 PROJECT_DIR = Path(__file__).resolve().parent
-OUT_DIR = PROJECT_DIR / "downloads" / "water_otsu"
-VRT_DIR = OUT_DIR / "vrt"
+DEFAULT_SOURCE_DIR = RTC_GRD_DIR                    # downloads/rtc_grd (RTC, 기본)
+DEFAULT_SUFFIX = "rtc_db"                            # 소스 파일명 *_<suffix>.tif
+DEFAULT_OUT_DIR = PROJECT_DIR / "downloads" / "water_otsu"
 
 NODATA_U8 = 255
 CHUNK_ROWS = 512
@@ -92,10 +102,13 @@ def scene_orbit(tif: Path) -> str | None:
     return m.group(2) if m else None
 
 
-def group_scenes(dates: list[str] | None) -> dict[tuple[str, str], list[Path]]:
-    """(날짜, 절대궤도) -> 프레임 목록. dates=None 이면 존재하는 모든 날짜."""
+def group_scenes(dates: list[str] | None, source_dir: Path, suffix: str
+                 ) -> dict[tuple[str, str], list[Path]]:
+    """(날짜, 절대궤도) -> 프레임 목록. dates=None 이면 존재하는 모든 날짜.
+    source_dir/suffix로 RTC(rtc_grd/*_rtc_db.tif) 외에 GTC·Frost 재처리본 등
+    다른 소스도 그대로 스캔할 수 있다(파일명의 날짜·궤도 패턴은 동일)."""
     groups: dict[tuple[str, str], list[Path]] = defaultdict(list)
-    for tif in sorted(RTC_GRD_DIR.glob("*_rtc_db.tif")):
+    for tif in sorted(source_dir.glob(f"*_{suffix}.tif")):
         d, orbit = scene_date(tif), scene_orbit(tif)
         if d is None or orbit is None:
             continue
@@ -105,10 +118,10 @@ def group_scenes(dates: list[str] | None) -> dict[tuple[str, str], list[Path]]:
     return groups
 
 
-def build_group_vrt(date: str, orbit: str, frames: list[Path]) -> Path:
+def build_group_vrt(date: str, orbit: str, frames: list[Path], vrt_dir: Path) -> Path:
     """궤도별 모자이크 VRT 생성. 소스를 절대경로로 넣어 VRT 위치와 무관하게 열림."""
-    VRT_DIR.mkdir(parents=True, exist_ok=True)
-    vrt_path = VRT_DIR / f"mosaic_{date}_o{orbit}.vrt"
+    vrt_dir.mkdir(parents=True, exist_ok=True)
+    vrt_path = vrt_dir / f"mosaic_{date}_o{orbit}.vrt"
     cmd = ["gdalbuildvrt", "-srcnodata", "0", "-vrtnodata", "0", "-overwrite",
            str(vrt_path), *[str(f.resolve()) for f in frames]]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
@@ -228,13 +241,13 @@ def write_water(vrt: Path, threshold: float, out_path: Path) -> tuple[int, int, 
 
 
 def water_for_group(date: str, orbit: str, frames: list[Path], out_name: str,
-                    args) -> dict:
-    vrt = build_group_vrt(date, orbit, frames)
+                    out_dir: Path, vrt_dir: Path, args) -> dict:
+    vrt = build_group_vrt(date, orbit, frames, vrt_dir)
     threshold, meta = tile_based_threshold(
         vrt, args.hist_min, args.hist_max, args.bins, args.tile, args.pctl,
         args.fallback_db)
 
-    out_path = OUT_DIR / out_name
+    out_path = out_dir / out_name
     n_water, n_valid, px_area_km2 = write_water(vrt, threshold, out_path)
 
     flags = []
@@ -266,6 +279,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="궤도별·날짜별 타일기반 Otsu 수체 지도")
     parser.add_argument("--dates", default=None,
                         help="쉼표구분 YYYYMMDD 목록 (생략 시 존재하는 모든 날짜)")
+    parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR,
+                        help="입력 dB GeoTIFF가 있는 폴더 (기본 downloads/rtc_grd)")
+    parser.add_argument("--suffix", default=DEFAULT_SUFFIX,
+                        help="입력 파일명 접미사, *_<suffix>.tif로 검색 (기본 rtc_db; GTC는 gtc_db)")
+    parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR,
+                        help="출력 폴더 (기본 downloads/water_otsu)")
+    parser.add_argument("--out-suffix", default="",
+                        help="출력 파일명에 붙일 접미사 (예: _frost, _gtc). 기본 없음")
     parser.add_argument("--hist-min", type=float, default=HIST_MIN_DEFAULT)
     parser.add_argument("--hist-max", type=float, default=HIST_MAX_DEFAULT)
     parser.add_argument("--bins", type=int, default=BINS_DEFAULT)
@@ -278,22 +299,26 @@ def main() -> None:
     args = parser.parse_args()
 
     dates = [d.strip() for d in args.dates.split(",")] if args.dates else None
-    groups = group_scenes(dates)
+    out_dir: Path = args.out_dir
+    vrt_dir = out_dir / "vrt"
+    groups = group_scenes(dates, args.source_dir, args.suffix)
     if not groups:
-        raise SystemExit("처리할 그룹이 없습니다 (해당 날짜의 *_rtc_db.tif 없음).")
+        raise SystemExit(f"처리할 그룹이 없습니다 ({args.source_dir}에 해당 날짜의 "
+                         f"*_{args.suffix}.tif 없음).")
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
     for (date, orbit) in sorted(groups):
         # 궤도 접미사(_o<절대궤도>)는 균일성을 위해 궤도 개수와 무관하게 항상 붙인다.
-        out_name = f"flood_water_total_{date}_o{orbit}.tif"
-        if (OUT_DIR / out_name).exists() and not args.overwrite:
+        out_name = f"flood_water_total_{date}_o{orbit}{args.out_suffix}.tif"
+        if (out_dir / out_name).exists() and not args.overwrite:
             print(f"[{date} o{orbit}] 이미 존재, 건너뜀: {out_name} (--overwrite 로 재계산)")
             continue
-        rows.append(water_for_group(date, orbit, groups[(date, orbit)], out_name, args))
+        rows.append(water_for_group(date, orbit, groups[(date, orbit)], out_name,
+                                    out_dir, vrt_dir, args))
 
     if rows:
-        csv_path = OUT_DIR / "otsu_thresholds.csv"
+        csv_path = out_dir / "otsu_thresholds.csv"
         write_header = not csv_path.exists()
         with open(csv_path, "a", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
