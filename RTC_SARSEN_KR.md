@@ -77,11 +77,35 @@ dB(10log10) 단일밴드, EPSG:4326, nodata=NaN — 기존 파이프라인(`wate
 5. `sarsen.terrain_correction`(RTC `gamma_bilinear` / GTC) → linear γ0
 6. dB 변환 → `_rtc_db.tif`
 
-## 한계 / 검증 상태
+## ⛔ 중대 결론 (2026-07-24): 스톡 sarsen 0.9.3은 S1C/S1D를 지원하지 않는다
 
-- 2~4·6단계와 S1C 패치는 **실측 검증 완료**(dry-run). 5단계(sarsen 실제
-  지형보정)는 이 문서 작성 시점 기준 미실행(무거워 별도 실행 예정) — 첫 실행 후
-  SNAP RTC 산출물과 dB 분포·지오코딩을 교차검증할 것.
-- sarsen γ0(flattening-gamma)과 SNAP Terrain-Flattening은 알고리즘이 유사하나
-  동일하진 않다. 절대 dB 기준이 미세하게 다를 수 있으므로, 고정 임계값(-16dB)을
-  쓰는 탐지에 넣기 전 SNAP RTC와 대조 권장.
+DEM 준비(2~4단계)와 S1C 파일명 패치까지는 검증됐지만, **실제 sarsen 지형보정
+(5단계)이 이 프로젝트의 S1C/S1D COG GRD에서 올바른 결과를 내지 못한다.** 두
+환경 모두 실패하며 양상이 다르다:
+
+| 환경 | 결과 |
+| --- | --- |
+| modern (numpy2.3/pandas2.3/xarray2025.4) | 제품·GCP·calibration·geocading 다 실행되고 **beta_nought도 91.5% 유효**한데, **마지막 `interp`(벡터화 datetime+ground_range)가 전부 NaN** → 출력 0% 유효. azimuth_time 숫자화·`_localize` hack 제거 모두 효과 없음. |
+| pinned (numpy1.26/pandas1.5/xarray2024, `sarsen_pin` env) | 제품조차 못 엶 — **GCP 파싱이 빈 결과**라 footprint 계산에서 zero-size crash. |
+
+**근본 원인**: sarsen(과 xarray-sentinel)은 **Sentinel-1C/D가 나오기 전에
+만들어졌고 그 전에 개발이 중단**됐다(마지막 커밋 ~2년 전). 결정적 증거 —
+xarray-sentinel의 애노테이션 파서 정규식이 `s1[ab]`로 **A/B 위성만** 하드코딩.
+그래서 패치를 하나 넘으면 다음 비호환(파일명→datetime[ns]→GCP 파싱→벡터화
+interp)이 계속 나온다. 이건 "버그 몇 개 수정"이 아니라 **위성 지원 자체를
+추가하는 포팅**이며, 시간제한 내 해결 불가로 판단해 보류한다.
+
+**함의**
+
+- `rtc_sarsen.py`·이 문서·`sarsen_pin` env는 **참고/기록용으로 보존**한다
+  (S1A/S1B 구제품엔 동작할 수 있고, 향후 sarsen 포팅/대체 시 출발점).
+- SNAP-free RTC가 꼭 필요한 대상 환경에서는: (a) sarsen를 S1C/D로 **정식
+  포팅**(상당 작업), (b) **ASF HyP3**(클라우드 RTC) 사용, (c) 그 환경에도 결국
+  SNAP 설치, 중 택일이 현실적이다.
+- 이 PC에는 SNAP이 있어 RTC가 정상 동작하므로, 당장의 처리는 SNAP RTC를 쓴다.
+- 따라서 "SNAP RTC vs sarsen RTC 속도 비교(B)"는 **sarsen이 유효 출력을 내기
+  전까지 불가**하다.
+
+(원래의 검증 주의 — sarsen γ0와 SNAP Terrain-Flattening은 알고리즘이 유사하나
+동일하지 않아, 동작하더라도 고정 임계값 탐지 전 SNAP RTC와 대조 필요 — 는
+여전히 유효하나, 위 사유로 현재는 무의미.)
