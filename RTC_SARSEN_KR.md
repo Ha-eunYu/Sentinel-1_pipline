@@ -77,35 +77,89 @@ dB(10log10) 단일밴드, EPSG:4326, nodata=NaN — 기존 파이프라인(`wate
 5. `sarsen.terrain_correction`(RTC `gamma_bilinear` / GTC) → linear γ0
 6. dB 변환 → `_rtc_db.tif`
 
-## ⛔ 중대 결론 (2026-07-24): 스톡 sarsen 0.9.3은 S1C/S1D를 지원하지 않는다
+## S1C/S1D 지원 — 소스 레벨 분석과 해법 (2026-07-24)
 
-DEM 준비(2~4단계)와 S1C 파일명 패치까지는 검증됐지만, **실제 sarsen 지형보정
-(5단계)이 이 프로젝트의 S1C/S1D COG GRD에서 올바른 결과를 내지 못한다.** 두
-환경 모두 실패하며 양상이 다르다:
+이 프로젝트 데이터는 전부 **Sentinel-1C/D COG GRD**다. sarsen/xarray-sentinel의
+버전에 따라 되고 안 되고가 갈려, 실제 소스를 읽어 원인을 확정하고 해법을 잡았다.
 
-| 환경 | 결과 |
+### A. 왜 구버전(PyPI sarsen 0.9.3 + xarray-sentinel 0.9.5)은 실패하는가 — 소스 근거
+
+1. **애노테이션 파서 정규식이 A/B만 인식** — `xarray_sentinel/esa_safe.py`
+   `parse_annotation_filename()`:
+
+   ```python
+   re.match(r"([a-z-]*)s1[ab]-([^-]*)-[^-]*-([^-]*)-([\dt]*)-", ...)   # 0.9.5
+   ```
+
+   `s1[ab]`라 `s1c-…`/`s1d-…` 파일명은 매치 실패.
+2. **매치 실패 파일은 조용히 스킵** — 같은 파일 `parse_manifest_sentinel1()`
+   (163~172행)이 각 dataObject에 위 함수를 부르고 `except ValueError: continue`.
+   즉 S1C는 **모든 애노테이션/측정/캘리브레이션 파일이 files 딕셔너리에서 빠진다**
+   → 그룹 0개(`Invalid group 'IW/VV'`). 게다가 `@functools.lru_cache`(106행)라
+   한 번 빈 결과가 캐시된다. → **`sarsen_pin`(구스택)에서 GCP 빈 결과·크래시의 원인.**
+3. **궤도 시각 ns 단정** — `sarsen/orbit.py`(0.9.3, 37/70/82행)
+   `assert time.dtype.name in ("datetime64[ns]", ...)`. 최신 pandas는 `datetime64[us]`
+   를 주므로 AssertionError. → modern 스택에서 실행조차 막던 요인(패치로 우회했었음).
+
+즉 구버전은 **S1C/D 출시 이전 코드**이고 개발이 중단돼, 패치를 하나 넘으면 다음
+비호환이 계속 나온다(정규식→ns→GCP→interp).
+
+### B. 해법 — sarsen 0.9.6 + xarray-sentinel main(≥0.9.6) + 모던 스택
+
+로컬에 확보한 최신 소스가 이 문제들을 이미 해결하고 있다(소스로 확인):
+
+- **`xarray-sentinel-main`**: `esa_safe.py`의 정규식이 **`s1[abcd]`** — S1A/B/**C/D**
+  전부 지원(유일 하드코딩 지점). GCP도 XSD(`resources/sentinel1/*.xsd`) 기반으로 재작성.
+- **`sarsen-0.9.6`**(정식 릴리스, `sarsen-0.9.6.tar.gz`): `pyproject`가
+  **numpy≥1.26 / pandas≥2.2 / xarray≥2023.12 / xarray-sentinel≥0.9.6**을 요구
+  → **모던 스택 전용**. apps.py가 대폭 리팩터(`OrbitPolyfitInterpolator`,
+  `do_terrain_correction`, `product.interp_sar`)돼 pandas2 datetime을 자체 처리.
+
+**설치(모던 env `sarsen_clean`: numpy2.3/pandas2.3/xarray2025.4 유지, `--no-deps`)**:
+
+```bash
+# xarray-sentinel은 반드시 editable(-e) — 일반 설치 시 wheel에 XSD 리소스가
+# 빠져 GCP 파싱이 URLError(s1-level-1-product.xsd 없음)로 실패한다.
+conda run -n sarsen_clean pip install --no-deps --force-reinstall -e xarray-sentinel-main/xarray-sentinel-main
+conda run -n sarsen_clean pip install --no-deps --force-reinstall    sarsen-0.9.6
+```
+
+설치 결과: `sarsen 0.9.6`, `xarray-sentinel 999`(main). 이후 `rtc_sarsen.py`를
+`sarsen_clean`에서 그대로 실행.
+
+### C. rtc_sarsen.py의 호환 패치(방어적)
+
+`rtc_sarsen.py`의 몽키패치는 **버전 감지 후 필요할 때만** 적용되도록 고쳤다:
+`s1[a-d]` 정규식 패치는 main(abcd)에선 무해, ns 패치는 클래스명이 바뀐 0.9.6에선
+자동으로 건너뛴다(`OrbitPolyfitIterpolator` 부재 감지). 따라서 rtc_sarsen.py는
+구/신 버전 어디서 돌려도 안전하다.
+
+### D. ✅ 검증 완료 (2026-07-27): sarsen으로 S1C RTC 가능
+
+**"SARSEN으로 RTC를 진행할 수 있는가?" → 가능하다(실증).** sarsen 0.9.6 +
+xarray-sentinel main + 모던 스택으로 이 프로젝트의 S1C COG GRD를 실제로
+지형보정해 **유효한 γ0(dB) 출력**을 얻었다.
+
+검증 씬: `754B`(7/3 09:22 UTC 상승, S1C, 해안/해상 위주). 처리 15.8분
+(지형보정+dB, `PROCESS_SECONDS=947.9`). 산출물 `downloads/rtc_grd_bench_sarsen/
+S1C_..._754B_..._rtc_db.tif`:
+
+| 지표 | 값 |
 | --- | --- |
-| modern (numpy2.3/pandas2.3/xarray2025.4) | 제품·GCP·calibration·geocading 다 실행되고 **beta_nought도 91.5% 유효**한데, **마지막 `interp`(벡터화 datetime+ground_range)가 전부 NaN** → 출력 0% 유효. azimuth_time 숫자화·`_localize` hack 제거 모두 효과 없음. |
-| pinned (numpy1.26/pandas1.5/xarray2024, `sarsen_pin` env) | 제품조차 못 엶 — **GCP 파싱이 빈 결과**라 footprint 계산에서 zero-size crash. |
+| 격자 | 11848×5864, EPSG:4326, float32, nodata=NaN |
+| 유효 픽셀 | 27,474,257 (39.5% — 스와스 밖은 nodata) |
+| dB 분포 | min −48.2 / p50 −20.1 / mean −20.3 / p95 −13.4 / max 32.0 |
+| 물(<−16dB) | 84.5% (해상 위주 씬과 부합) |
 
-**근본 원인**: sarsen(과 xarray-sentinel)은 **Sentinel-1C/D가 나오기 전에
-만들어졌고 그 전에 개발이 중단**됐다(마지막 커밋 ~2년 전). 결정적 증거 —
-xarray-sentinel의 애노테이션 파서 정규식이 `s1[ab]`로 **A/B 위성만** 하드코딩.
-그래서 패치를 하나 넘으면 다음 비호환(파일명→datetime[ns]→GCP 파싱→벡터화
-interp)이 계속 나온다. 이건 "버그 몇 개 수정"이 아니라 **위성 지원 자체를
-추가하는 포팅**이며, 시간제한 내 해결 불가로 판단해 보류한다.
+빈 NaN(구버전 실패)도, 쓰레기도 아닌 **정상 SAR γ0 dB 분포** → S1C 읽기 장벽
+(정규식·GCP·footprint)과 geocoding·interp까지 모두 정상 통과.
 
-**함의**
+**남은 검증/후속**
 
-- `rtc_sarsen.py`·이 문서·`sarsen_pin` env는 **참고/기록용으로 보존**한다
-  (S1A/S1B 구제품엔 동작할 수 있고, 향후 sarsen 포팅/대체 시 출발점).
-- SNAP-free RTC가 꼭 필요한 대상 환경에서는: (a) sarsen를 S1C/D로 **정식
-  포팅**(상당 작업), (b) **ASF HyP3**(클라우드 RTC) 사용, (c) 그 환경에도 결국
-  SNAP 설치, 중 택일이 현실적이다.
-- 이 PC에는 SNAP이 있어 RTC가 정상 동작하므로, 당장의 처리는 SNAP RTC를 쓴다.
-- 따라서 "SNAP RTC vs sarsen RTC 속도 비교(B)"는 **sarsen이 유효 출력을 내기
-  전까지 불가**하다.
-
-(원래의 검증 주의 — sarsen γ0와 SNAP Terrain-Flattening은 알고리즘이 유사하나
-동일하지 않아, 동작하더라도 고정 임계값 탐지 전 SNAP RTC와 대조 필요 — 는
-여전히 유효하나, 위 사유로 현재는 무의미.)
+- SNAP RTC(`_rtc_db.tif`)와 **dB 수준·지오코딩 위치를 교차검증**(같은 씬으로 정합
+  확인). sarsen γ0(flattening-gamma) ↔ SNAP Terrain-Flattening은 알고리즘이 유사
+  하나 동일하지 않아, 고정 임계값(-16dB) 탐지에 넣기 전 대조 필요.
+- 그 뒤 "SNAP RTC vs sarsen RTC 속도 비교(B)" 진행(현재 754B 기준 sarsen ~15.8분).
+- `sarsen_pin`(pandas1.5 핀 env)은 **막다른 길** — main이 pandas≥2.2 요구. 정리 대상.
+- rtc_sarsen.py 기본 실행 env를 `sarsen_clean`(0.9.6+main)으로 간주(문서 상단 예시의
+  환경명은 참고용).

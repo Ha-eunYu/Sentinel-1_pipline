@@ -47,7 +47,17 @@ import numpy as np
 import rasterio
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 
-# --- (1) S1C/S1D 지원 몽키패치: xarray-sentinel 애노테이션 정규식 s1[ab] -> s1[a-d] ---
+# --- (1) 호환 몽키패치 (버전에 따라 자동 적용/생략) ---
+# 이 프로젝트는 sarsen 여러 버전을 오갈 수 있어(0.9.3 stock ↔ 0.9.6/main), 아래
+# 패치는 "필요할 때만, 없으면 조용히 건너뛰기(no-op)"로 방어적으로 적용한다.
+#
+# (1a) S1C/S1D 지원: 구버전 xarray-sentinel(<=0.9.5)의 애노테이션 파서 정규식이
+#      s1[ab]로 하드코딩돼 S1C/D 파일을 전부 스킵한다(esa_safe.parse_manifest_sentinel1
+#      의 continue). s1[a-d]로 넓힌다. main/0.9.6은 이미 s1[abcd]라 이 패치는 무해.
+# (1b) datetime[ns] 강제: 구버전 sarsen orbit이 궤도 시각을 반드시 [ns]로 단정하는데
+#      최신 pandas가 [us]를 줘서 AssertionError. 클래스가 있을 때만 세 메서드 입력
+#      시각을 ns로 강제한다. 0.9.6은 클래스명이 OrbitPolyfitInterpolator로 바뀌고
+#      pandas2용으로 자체 처리하므로 이 패치는 적용되지 않고 건너뛴다.
 import xarray_sentinel.esa_safe as _esa_safe
 
 
@@ -58,9 +68,46 @@ def _parse_annotation_filename_s1cd(name: str):
     return tuple(m.groups())
 
 
-_esa_safe.parse_annotation_filename = _parse_annotation_filename_s1cd
+try:
+    _esa_safe.parse_annotation_filename = _parse_annotation_filename_s1cd
+except Exception:  # pragma: no cover
+    pass
 
 import sarsen  # noqa: E402  (패치 후 임포트)
+
+
+def _coerce_ns(da):
+    n = getattr(getattr(da, "dtype", None), "name", "")
+    if n.startswith("datetime64") and n != "datetime64[ns]":
+        return da.astype("datetime64[ns]")
+    if n.startswith("timedelta64") and n != "timedelta64[ns]":
+        return da.astype("timedelta64[ns]")
+    return da
+
+
+def _install_orbit_ns_patch() -> bool:
+    """구버전 sarsen orbit에 ns 강제 패치. 대상 클래스가 없으면(신버전) no-op."""
+    try:
+        import sarsen.orbit as _orb
+    except Exception:
+        return False
+    cls = getattr(_orb, "OrbitPolyfitIterpolator", None)  # 구버전 오타 클래스명
+    if cls is None:
+        return False  # 0.9.6/main은 OrbitPolyfitInterpolator → 패치 불필요
+    of, op, ov = cls.from_position.__func__, cls.position, cls.velocity
+
+    def _fp(c, position, dim="azimuth_time", **kw):
+        if dim in position.coords:
+            position = position.assign_coords({dim: _coerce_ns(position.coords[dim])})
+        return of(c, position, dim=dim, **kw)
+
+    cls.from_position = classmethod(_fp)
+    cls.position = lambda self, time=None, **kw: op(self, None if time is None else _coerce_ns(time), **kw)
+    cls.velocity = lambda self, time=None, **kw: ov(self, None if time is None else _coerce_ns(time), **kw)
+    return True
+
+
+_ORBIT_NS_PATCHED = _install_orbit_ns_patch()
 
 PROJECT_DIR = Path(__file__).resolve().parent
 # 이미 로컬에 받아둔 COP30 전지구 VRT(EGM2008 지오이드 기준, EPSG:4326 30m).
