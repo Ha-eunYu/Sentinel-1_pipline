@@ -81,12 +81,18 @@ def build_grd_rtc_graph(
     apply_border_noise_removal: bool = False,
     apply_speckle_filter: bool = True,
     speckle_filter_name: str = "Frost",  # 2026-07-23 Refined Lee→Frost (FILTER_COMPARISON §6: 가는 수로 보존)
+    speckle_window_size: int | None = None,
+    speckle_damping_factor: int | None = None,
     aoi_wkt: str | None = None,
 ) -> Graph:
     """Sentinel-1 IW GRD 한 장을 RTC(Gamma0) dB GeoTIFF로 만드는 gpt 그래프.
 
     out_tag: 산출물 파일명 접미사. 같은 씬을 다른 DEM으로 처리할 때 구분용
     (예: "_ngiidem" -> <씬ID>_rtc_db_ngiidem.tif).
+
+    speckle_window_size / speckle_damping_factor: 주면 Speckle-Filter에 명시적으로
+    전달(Frost의 filterSizeX/Y, dampingFactor). None이면 SNAP 기본값(Frost 3×3,
+    damping 2). 로컬 Frost와 하이퍼파라미터를 맞춰 비교할 때 지정한다.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -159,8 +165,14 @@ def build_grd_rtc_graph(
         prev = "Subset"
 
     if apply_speckle_filter:
+        speckle_params: dict[str, str] = {"filter": speckle_filter_name}
+        if speckle_window_size is not None:
+            speckle_params["filterSizeX"] = str(int(speckle_window_size))
+            speckle_params["filterSizeY"] = str(int(speckle_window_size))
+        if speckle_damping_factor is not None:
+            speckle_params["dampingFactor"] = str(int(speckle_damping_factor))
         g.add_node(
-            Operator("Speckle-Filter", filter=speckle_filter_name),
+            Operator("Speckle-Filter", **speckle_params),
             node_id="Speckle-Filter",
             source=prev,
         )

@@ -23,6 +23,7 @@ SNAP을 설치할 수 없는 환경에서 Sentinel-1 GRD를 RTC(γ0)/GTC로 지�
 ## ⚠️ 이 데이터에서 반드시 필요한 두 가지 (실측 확인)
 
 ### 1. S1C/S1D 지원 몽키패치
+
 xarray-sentinel 0.9.5의 애노테이션 파서 정규식이 **`s1[ab]`로 하드코딩**
 (esa_safe.py:99)돼 있어 **Sentinel-1C/D를 인식하지 못한다** — 그룹 0개로
 `ValueError: Invalid group 'IW/VV'`. 이 프로젝트 데이터는 전부 S1C/S1D라 그대로는
@@ -31,6 +32,7 @@ xarray-sentinel 0.9.5의 애노테이션 파서 정규식이 **`s1[ab]`로 하�
 확인: `product_type=GRD, 26362×16664`.
 
 ### 2. DEM 수직기준 EGM2008 → 타원체고
+
 COP30(및 NGII)은 **EGM2008 지오이드(정표고)** 기준인데 sarsen의 Range-Doppler
 지오코딩은 **타원체고**를 가정한다. SNAP은 이 보정을 내부에서 했지만
 (`externalDEMApplyEGM`) sarsen은 안 한다. 안 하면 급경사에서 수십 m 위치편차가
@@ -154,12 +156,17 @@ S1C_..._754B_..._rtc_db.tif`:
 빈 NaN(구버전 실패)도, 쓰레기도 아닌 **정상 SAR γ0 dB 분포** → S1C 읽기 장벽
 (정규식·GCP·footprint)과 geocoding·interp까지 모두 정상 통과.
 
-**남은 검증/후속**
+**남은 검증/후속 (진행 상황)**
 
-- SNAP RTC(`_rtc_db.tif`)와 **dB 수준·지오코딩 위치를 교차검증**(같은 씬으로 정합
-  확인). sarsen γ0(flattening-gamma) ↔ SNAP Terrain-Flattening은 알고리즘이 유사
-  하나 동일하지 않아, 고정 임계값(-16dB) 탐지에 넣기 전 대조 필요.
-- 그 뒤 "SNAP RTC vs sarsen RTC 속도 비교(B)" 진행(현재 754B 기준 sarsen ~15.8분).
-- `sarsen_pin`(pandas1.5 핀 env)은 **막다른 길** — main이 pandas≥2.2 요구. 정리 대상.
-- rtc_sarsen.py 기본 실행 env를 `sarsen_clean`(0.9.6+main)으로 간주(문서 상단 예시의
-  환경명은 참고용).
+- ✅ **교차검증 완료(2026-07-27)**: 같은 COP30로 sarsen vs SNAP(754B) 대조 →
+  **지오코딩 위치 완전 일치(시프트 0, r 0.88)**, γ0 dB는 중앙값 **+0.96 dB** 차·
+  r 0.88(스펙클 미필터+해상도차 감안 예상 범위). 상세는
+  [RTC_BENCHMARK_KR.md](RTC_BENCHMARK_KR.md) §2.5. → 고정 −16dB 탐지 전 ~1 dB
+  오프셋만 반영(또는 Otsu 적응형)하면 됨.
+- 🔄 **속도 비교(B) 진행 중**: 용량 버킷별 9장 SNAP vs sarsen(단독 실행). 결과는
+  [RTC_BENCHMARK_KR.md](RTC_BENCHMARK_KR.md) §3.
+- ⚠️ **DEM 주의**: SNAP 자동 Copernicus DEM은 이 데이터 일부 씬에서 타일을 일부만
+  받아 무효 출력(재현됨). sarsen은 로컬 COP30(D:)을 직접 써서 이 문제 없음
+  ([RTC_BENCHMARK_KR.md](RTC_BENCHMARK_KR.md) §2).
+- ✅ `sarsen_pin`(pandas1.5 핀 env) **삭제 완료**(막다른 길: main이 pandas≥2.2 요구).
+- rtc_sarsen.py 기본 실행 env는 `sarsen_clean`(0.9.6+main).
