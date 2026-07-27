@@ -18,9 +18,9 @@ from stac.models import (
 # 진짜 한반도 프레임(예: 93DD, 제주 인근 5.27% 겹침)이 검색에서 통째로 누락되는
 # 문제를 발견 -> 검색은 느슨한 bbox로, 정확한 한반도 여부 판정은 이 실경계로
 # 분리했다(SCENE_FOOTPRINT_REAUDIT_KR.md와 동일한 검증 방법).
-# bbox 대신 footprint로 촬영 지역을 판정하는 로직은 footprint_aoi 모듈에 통합돼
-# 있다(FOOTPRINT_AOI_KR.md 참조). 여기서는 STAC item용 얇은 어댑터만 둔다.
-from footprint_aoi import footprint_intersects
+# bbox 대신 footprint로 촬영 지역을 판정하는 로직은 footprint 패키지에 통합돼
+# 있다(footprint/FOOTPRINT_AOI_KR.md 참조). 여기서는 STAC item용 얇은 어댑터만 둔다.
+from footprint import footprint_intersects
 
 
 def touches_korea(item) -> bool:

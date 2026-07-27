@@ -40,7 +40,8 @@ from typing import Any, Iterable
 
 import numpy as np
 
-PROJECT_DIR = Path(__file__).resolve().parent
+# 이 모듈은 footprint/ 하위에 있으므로 저장소 루트는 부모의 부모.
+PROJECT_DIR = Path(__file__).resolve().parent.parent
 GEOJSON_DIR = PROJECT_DIR / "geojson"
 KOREA_PENINSULA = GEOJSON_DIR / "Korea_Peninsula.geojson"
 

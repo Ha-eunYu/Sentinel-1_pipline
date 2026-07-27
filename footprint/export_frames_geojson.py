@@ -16,8 +16,8 @@ SLC/GRD를 나눠 보려면 `product` 필드로 필터하거나 룰 기반 스�
 footprint는 CDSE STAC에서 씬 ID로 정확한 폴리곤을 조회하고,
 조회 실패 시 manifest의 bbox 사각형으로 대체한다 (geometry_source 필드로 구분).
 
-실행:
-    conda run -n s1_pipeline python export_frames_geojson.py
+실행(저장소 루트에서 — downloads/ 경로가 현재 작업 폴더 기준이라 루트에서 실행):
+    conda run -n s1_pipeline python footprint/export_frames_geojson.py
 """
 
 from __future__ import annotations

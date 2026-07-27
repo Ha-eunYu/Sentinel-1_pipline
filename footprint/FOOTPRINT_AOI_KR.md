@@ -26,7 +26,7 @@ Sentinel-1 IW 프레임은 궤도 방위각만큼 **기울어진 평행사변형
 그 삼각형 여백이 하필 관심 경계(한반도)에 걸치면, **실제로는 100% 바다이거나
 중국·일본 전용인 프레임이 bbox 기준으로는 "한반도를 찍었다"** 고 오판된다.
 
-`python footprint_aoi.py`로 이 오판을 재현할 수 있다(합성 예제):
+`python footprint/footprint_aoi.py`로 이 오판을 재현할 수 있다(합성 예제):
 
 ```
 bbox 오판 기하 데모 (경계=[0,1]^2, footprint=기울어진 마름모):
@@ -38,7 +38,7 @@ bbox 오판 기하 데모 (경계=[0,1]^2, footprint=기울어진 마름모):
 ### 이게 실제로 낸 사고
 
 이 bbox 오판은 문서에 발표됐던 홍수 침수 수치를 아티팩트로 만들었다. 자세한
-경위는 [SCENE_FOOTPRINT_REAUDIT_KR.md](SCENE_FOOTPRINT_REAUDIT_KR.md)에 있다.
+경위는 [SCENE_FOOTPRINT_REAUDIT_KR.md](../SCENE_FOOTPRINT_REAUDIT_KR.md)에 있다.
 
 - 7/8·7/10 남한 침수 수치(1.64 km²·69.06 km²)의 근거 프레임이 실제로는
   **한반도 육지 겹침 0%**(제주 남쪽·대마도~규슈 방향 먼바다)였다.
@@ -76,7 +76,7 @@ STAC 검색(느슨한 bbox AOI)  →  후보 프레임들  →  각 프레임의
 | 파일 | 역할 | footprint_aoi에서 쓰는 함수 |
 |---|---|---|
 | [footprint_aoi.py](footprint_aoi.py) | **공용 판정 로직 (단일 출처)** | — |
-| [stac/search_s1.py](stac/search_s1.py) | 다운로드 파이프라인의 자동 제외 필터 (`touches_korea`) | `footprint_intersects` |
+| [stac/search_s1.py](../stac/search_s1.py) | 다운로드 파이프라인의 자동 제외 필터 (`touches_korea`) | `footprint_intersects` |
 | [verify_scene_footprint.py](verify_scene_footprint.py) | 처리된 래스터의 물 픽셀 사후 검증 | `load_exterior_rings`, `points_in_rings` |
 | [export_frames_geojson.py](export_frames_geojson.py) | 실제 footprint를 QGIS용 GeoJSON으로 내보내기 | (STAC footprint 직접 사용, bbox는 fallback) |
 
@@ -119,7 +119,7 @@ STAC 검색(느슨한 bbox AOI)  →  후보 프레임들  →  각 프레임의
 ### 처리 결과 사후 검증
 
 ```bash
-conda run -n s1_snappy python verify_scene_footprint.py --tag 20260716_o003704_3scene \
+conda run -n s1_snappy python footprint/verify_scene_footprint.py --tag 20260716_o003704_3scene \
     --scenes <scene1>_rtc_db.tif <scene2>_rtc_db.tif <scene3>_rtc_db.tif
 ```
 
@@ -130,7 +130,7 @@ conda run -n s1_snappy python verify_scene_footprint.py --tag 20260716_o003704_3
 ### QGIS 보고
 
 ```bash
-conda run -n s1_pipeline python export_frames_geojson.py
+conda run -n s1_pipeline python footprint/export_frames_geojson.py
 ```
 
 `downloads/s1_frames_report.geojson`에 각 프레임의 **실제 footprint 폴리곤**을
@@ -143,7 +143,7 @@ manifest의 bbox 사각형으로 대체하고, 어느 쪽인지 `geometry_source
 특정 프레임에서 bbox 판정이 왜 틀리는지 수치로 남기려면:
 
 ```python
-from footprint_aoi import compare_bbox_vs_footprint
+from footprint import compare_bbox_vs_footprint
 print(compare_bbox_vs_footprint(item.bbox, item.geometry))
 # {'bbox_intersects': True, 'footprint_intersects': False,
 #  'bbox_false_positive': True, ...}
@@ -164,8 +164,8 @@ print(compare_bbox_vs_footprint(item.bbox, item.geometry))
 
 ## 관련 문서
 
-- [SCENE_FOOTPRINT_REAUDIT_KR.md](SCENE_FOOTPRINT_REAUDIT_KR.md) — bbox 오판이
+- [SCENE_FOOTPRINT_REAUDIT_KR.md](../SCENE_FOOTPRINT_REAUDIT_KR.md) — bbox 오판이
   낸 사고의 상세 감사 기록
-- [FLOOD_TIMELINE_KR.md](FLOOD_TIMELINE_KR.md) — 무효 확정이 반영된 침수 타임라인
-- [FLOOD_NORTH_KOREA_KR.md](FLOOD_NORTH_KOREA_KR.md) — 동일 패턴(baseline 커버리지
+- [FLOOD_TIMELINE_KR.md](../FLOOD_TIMELINE_KR.md) — 무효 확정이 반영된 침수 타임라인
+- [FLOOD_NORTH_KOREA_KR.md](../FLOOD_NORTH_KOREA_KR.md) — 동일 패턴(baseline 커버리지
   아티팩트)의 최초 규명

@@ -52,7 +52,7 @@ ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임
     filtering/  순수 파이썬 speckle 필터 7종 (SNAP과 동등성 검증됨; refined_lee_snap=SNAP 충실 재현)
     qa/         필터 4축 정량 평가 (ENL·소하천·경계·수면분리도)
 
-[보고] export_frames_geojson.py  프레임 현황 GeoJSON (QGIS)
+[보고] footprint/export_frames_geojson.py  프레임 현황 GeoJSON (QGIS)
        export_graph_xml.py       SNAP Desktop GraphBuilder용 그래프 XML
 ```
 
@@ -108,7 +108,7 @@ conda run -n s1_snappy python download_hand.py
 conda run -n s1_snappy python build_baseline_water.py
 
 # (보고) 프레임 현황 GeoJSON -> QGIS에서 status/product 필드로 스타일
-conda run -n s1_pipeline python export_frames_geojson.py
+conda run -n s1_pipeline python footprint/export_frames_geojson.py
 ```
 
 ## 폴더 구조
@@ -139,7 +139,10 @@ build_baseline_composite_grd.py # pre-event baseline (--fallback-dates 빈틈메
 detect_flood_grd.py        # 신규침수 탐지 v1 (참고용)
 detect_flood_grd_v2.py     # 신규침수 탐지 현재 버전 (--dates/--baseline/--tag)
 split_flood_area_nk_sk.py  # 침수 면적 남/북한 분리 집계
-verify_scene_footprint.py  # 특정 씬 격리 수체지도 + 경계 내부비율 검증 (SCENE_FOOTPRINT_REAUDIT §5)
+footprint/                 # 촬영지역 판정 툴킷 (bbox 대신 footprint, FOOTPRINT_AOI_KR.md)
+  footprint_aoi.py         #   공용 판정 로직 (프레임=shapely / 픽셀=numpy, 단일 출처)
+  verify_scene_footprint.py #   특정 씬 격리 수체지도 + 경계 내부비율 검증 (SCENE_FOOTPRINT_REAUDIT §5)
+  export_frames_geojson.py #   프레임 상태 보고 GeoJSON (SLC+GRD, QGIS)
 flood_hotspots.py          # 침수 핫스팟 추출 + GeoJSON
 build_water_per_date.py    # 날짜별 baseline-무관 수체 지도 (고정 dB<-16)
 build_water_per_date_otsu.py # 궤도별·날짜별 타일기반 Otsu 수체 지도 (water_otsu/)
@@ -150,7 +153,6 @@ monitor_new_scenes.ps1     # ↑ 래퍼: 윈도우 알림 + 백그라운드/주�
 archive_gtc.ps1            # GTC tif를 downloads/gtc/로 분리 보관 (배치 종료 후 실행)
 filtering/                 # speckle 필터 7종 순수 파이썬 구현 (refined_lee_snap 포함, FILTER_COMPARISON_KR.md)
 qa/                        # 필터 정량 QA 4축 (compare/metrics/visualize + CLI)
-export_frames_geojson.py   # 프레임 상태 보고 GeoJSON (SLC+GRD)
 export_graph_xml.py        # SNAP Desktop용 그래프 XML 생성
 graphs/                    # 생성된 그래프 XML (GraphBuilder에서 Load 가능)
 geojson/                   # AOI·경계 폴리곤 (2026-07-22 폴더 분리)
@@ -273,7 +275,7 @@ S1A는 **2026-06-29부로 12년 운영을 마치고 퇴역**했습니다
 같은 패스 프레임이 우연히 탈락하는 문제가 있어 제거했습니다 — 이제 근접 일자의
 프레임을 `MAX_DOWNLOADS` 한도까지 순서대로 받으므로, 한도를 넉넉히 주면(또는
 `None`) 해당 날짜의 프레임이 통째로 들어옵니다. 프레임 현황은
-`export_frames_geojson.py` 결과를 QGIS로 확인.
+`footprint/export_frames_geojson.py` 결과를 QGIS로 확인.
 
 ### 중국·일본 등 비한반도 프레임 자동 제외 (footprint 필터, 2026-07-23)
 

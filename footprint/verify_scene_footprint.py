@@ -15,8 +15,8 @@
 산출물:
   downloads/water_otsu/verify/flood_water_isolated_<tag>.tif   (0/1/255)
 
-실행:
-  conda run -n s1_snappy python verify_scene_footprint.py --tag 20260716_o003704_3scene \\
+실행(저장소 루트에서):
+  conda run -n s1_snappy python footprint/verify_scene_footprint.py --tag 20260716_o003704_3scene \\
       --scenes downloads/etc/S1D_..._D298_COG_rtc_db.tif \\
                downloads/rtc_grd/S1D_..._3191_COG_rtc_db.tif \\
                downloads/rtc_grd/S1D_..._4C7C_COG_rtc_db.tif
@@ -33,11 +33,14 @@ import numpy as np
 import rasterio
 from rasterio.windows import Window
 
-# bbox 대신 footprint로 촬영 지역을 판정하는 로직은 footprint_aoi 모듈에 통합돼
-# 있다(FOOTPRINT_AOI_KR.md). 픽셀 단위 point-in-polygon도 거기서 가져다 쓴다.
+# bbox 대신 footprint로 촬영 지역을 판정하는 로직은 같은 폴더의 footprint_aoi
+# 모듈에 통합돼 있다(FOOTPRINT_AOI_KR.md). 픽셀 단위 point-in-polygon도 거기서
+# 가져다 쓴다. 이 스크립트를 직접 실행하면 자기 폴더가 sys.path에 들어가므로
+# 형제 모듈 import가 그대로 동작한다.
 from footprint_aoi import load_exterior_rings, points_in_rings
 
-PROJECT_DIR = Path(__file__).resolve().parent
+# 이 스크립트는 footprint/ 하위에 있으므로 저장소 루트는 부모의 부모.
+PROJECT_DIR = Path(__file__).resolve().parent.parent
 GEOJSON_DIR = PROJECT_DIR / "geojson"
 OUT_DIR = PROJECT_DIR / "downloads" / "water_otsu" / "verify"
 

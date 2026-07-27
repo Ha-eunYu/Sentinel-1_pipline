@@ -98,7 +98,7 @@ point-in-polygon 대조했다.
 3. 이번에 쓴 재조회·픽셀검증 방법(2·3절)을 향후 "소형/특정 궤도" 단독
    결과를 문서에 올릴 때 **사전 검증 단계로 표준화**할 것 — 이번 사고의
    근본 원인은 소형 프레임의 겹침 구간을 육안/좌표 어림으로만 판단하고
-   실제 폴리곤 교차를 안 했던 것. **표준 도구: [verify_scene_footprint.py](verify_scene_footprint.py)**
+   실제 폴리곤 교차를 안 했던 것. **표준 도구: [verify_scene_footprint.py](footprint/verify_scene_footprint.py)**
    (씬 격리 모자이크 → 수체 지도 → 경계 point-in-polygon, shapely 불필요).
 4. **완료(2026-07-23)**: 이 재감사가 매번 수동으로 하던 "실제 footprint 재조회 →
    한반도 실경계와 대조" 검증을 **다운로드 파이프라인 자체에 자동화**했다
@@ -111,7 +111,7 @@ point-in-polygon 대조했다.
    인벤토리에 없던 프레임). 반대로 `E265`(7/1)는 위도 42.4~44.3°N(만주)로
    교집합 0%임이 재확인돼 계속 제외된다.
 5. **완료(2026-07-27)**: bbox 대신 footprint로 촬영 지역을 판정하는 로직을
-   여러 파일에 흩어져 있던 것에서 재사용 모듈 [footprint_aoi.py](footprint_aoi.py)
-   하나로 통합하고, 배경·사용법을 [FOOTPRINT_AOI_KR.md](FOOTPRINT_AOI_KR.md)로
+   여러 파일에 흩어져 있던 것에서 재사용 모듈 [footprint_aoi.py](footprint/footprint_aoi.py)
+   하나로 통합하고, 배경·사용법을 [FOOTPRINT_AOI_KR.md](footprint/FOOTPRINT_AOI_KR.md)로
    정리했다. `stac/search_s1.py`(`touches_korea`)와 `verify_scene_footprint.py`는
    이제 이 모듈을 가져다 쓴다(동작 동일, 단일 출처).
