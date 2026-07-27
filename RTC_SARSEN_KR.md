@@ -165,8 +165,9 @@ S1C_..._754B_..._rtc_db.tif`:
   오프셋만 반영(또는 Otsu 적응형)하면 됨.
 - 🔄 **속도 비교(B) 진행 중**: 용량 버킷별 9장 SNAP vs sarsen(단독 실행). 결과는
   [RTC_BENCHMARK_KR.md](RTC_BENCHMARK_KR.md) §3.
-- ⚠️ **DEM 주의**: SNAP 자동 Copernicus DEM은 이 데이터 일부 씬에서 타일을 일부만
-  받아 무효 출력(재현됨). sarsen은 로컬 COP30(D:)을 직접 써서 이 문제 없음
+- ℹ️ **DEM 참고**: SNAP 자동 Copernicus DEM은 육상 씬에서 정상(기존 파이프라인
+  문제 없음). 단 754B(해상 위주 씬)에서는 이번에 타일을 1개만 받아 커버리지가
+  부족했고, 로컬 COP30(D:)로 넣으니 정상이었다(씬 국한, 상시 문제 아님)
   ([RTC_BENCHMARK_KR.md](RTC_BENCHMARK_KR.md) §2).
 - ✅ `sarsen_pin`(pandas1.5 핀 env) **삭제 완료**(막다른 길: main이 pandas≥2.2 요구).
 - rtc_sarsen.py 기본 실행 env는 `sarsen_clean`(0.9.6+main).

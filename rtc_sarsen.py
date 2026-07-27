@@ -109,6 +109,32 @@ def _install_orbit_ns_patch() -> bool:
 
 _ORBIT_NS_PATCHED = _install_orbit_ns_patch()
 
+
+def _install_chunking_patch() -> bool:
+    """sarsen 라디오메트리 시뮬레이션의 map_overlap 교체.
+
+    기본값 `simple_dask_map_overlap`은 (1) 첫 dask 청크가 overlap 깊이(128)보다
+    작으면 `allow_rechunk=False`로 즉시 실패하고(일부 씬의 청크 배치에서 발생),
+    (2) 풀사이즈 IW GRD(약 26k×16k)에서 full float64 그리드를 여러 개 적재해
+    피크 메모리가 20GB+로 튀어 OOM 위험이 크다.
+
+    sarsen이 같은 시그니처로 제공하는 `sync_map_overlap`(수동 2048 타일 + bound 128,
+    dask overlap 미사용)으로 교체하면 두 문제를 모두 피한다. apps.py가
+    `chunking.map_overlap`을 호출 시점에 조회하므로 모듈 속성 교체로 충분하다.
+    구버전에 sync 구현이 없으면 no-op."""
+    try:
+        import sarsen.chunking as _ch
+    except Exception:
+        return False
+    sync = getattr(_ch, "sync_map_overlap", None)
+    if sync is None or getattr(_ch, "map_overlap", None) is sync:
+        return False
+    _ch.map_overlap = sync
+    return True
+
+
+_CHUNKING_PATCHED = _install_chunking_patch()
+
 PROJECT_DIR = Path(__file__).resolve().parent
 # 이미 로컬에 받아둔 COP30 전지구 VRT(EGM2008 지오이드 기준, EPSG:4326 30m).
 # 대상 환경이 다르면 --cop30-vrt로 지정.
@@ -213,9 +239,15 @@ def apply_egm2008(dem_in: Path, egm_grid: Path, dem_out: Path) -> None:
 
 
 def run_terrain_correction(safe_dir: Path, dem_ellip: Path, out_linear: Path,
-                           pol: str, gtc: bool, radiometry: str) -> None:
+                           pol: str, gtc: bool, radiometry: str,
+                           tc_chunks: int | None = None) -> None:
     product = sarsen.Sentinel1SarProduct(str(safe_dir), measurement_group=f"IW/{pol.upper()}")
     kwargs = dict(product=product, dem_urlpath=str(dem_ellip), output_urlpath=str(out_linear))
+    if tc_chunks:
+        # 풀사이즈 IW GRD는 기본 청크(1024/2048)에서 지오코딩 interp가 full float64
+        # 그리드를 적재해 OOM 위험 → 청크를 줄여 map_blocks 타일·피크 메모리를 낮춘다.
+        kwargs["chunks"] = int(tc_chunks)
+        kwargs["radiometry_chunks"] = int(tc_chunks)
     if not gtc:
         kwargs["correct_radiometry"] = radiometry  # gamma_bilinear / gamma_nearest
     sarsen.terrain_correction(**kwargs)
@@ -249,6 +281,9 @@ def main() -> None:
     ap.add_argument("--gtc", action="store_true", help="지형평탄화 생략(GTC). 기본은 RTC(γ0)")
     ap.add_argument("--radiometry", default="gamma_bilinear",
                     choices=["gamma_bilinear", "gamma_nearest"], help="RTC 방사보정 방식")
+    ap.add_argument("--tc-chunks", type=int, default=None,
+                    help="지형보정 청크 크기(chunks·radiometry_chunks). 풀사이즈 씬 OOM 시 "
+                         "256~512로 낮춤. 생략 시 sarsen 기본(1024/2048)")
     ap.add_argument("--external-dem", default=None, help="외부 DEM(NGII 등). 생략 시 COP30 VRT")
     ap.add_argument("--cop30-vrt", type=Path, default=DEFAULT_COP30_VRT, help="로컬 COP30 전지구 VRT")
     ap.add_argument("--no-egm", action="store_true", help="EGM2008->타원체고 보정 생략")
@@ -301,7 +336,8 @@ def main() -> None:
         print(f"[4/5] sarsen 지형보정 ({'GTC' if args.gtc else 'RTC γ0 ' + args.radiometry})")
         import time as _time
         _t0 = _time.perf_counter()
-        run_terrain_correction(safe_dir, dem_ellip, out_linear, args.pol, args.gtc, args.radiometry)
+        run_terrain_correction(safe_dir, dem_ellip, out_linear, args.pol, args.gtc,
+                                args.radiometry, tc_chunks=args.tc_chunks)
 
         print(f"[5/5] dB 변환 -> {out_db.name}")
         linear_to_db(out_linear, out_db)

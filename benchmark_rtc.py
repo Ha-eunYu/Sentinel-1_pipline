@@ -212,6 +212,8 @@ def main() -> None:
     ap.add_argument("--snap-dem-mode", choices=["auto", "cop30"], default="auto",
                     help="SNAP DEM: auto=자동 Copernicus(C:), cop30=로컬 COP30(D:) 클립 external")
     ap.add_argument("--cop30-vrt", type=Path, default=DEFAULT_COP30_VRT)
+    ap.add_argument("--sarsen-tc-chunks", type=int, default=None,
+                    help="sarsen 지형보정 청크(풀사이즈 씬 OOM 방지, 예 256/384)")
     ap.add_argument("--snap-env", default="s1_snappy")
     ap.add_argument("--sarsen-env", default="sarsen_clean")
     ap.add_argument("--force", action="store_true", help="실행 중 gpt/java가 있어도 강행")
@@ -247,18 +249,33 @@ def main() -> None:
         print("  - sarsen RTC ...")
         sarsen_cmd = ["conda", "run", "-n", args.sarsen_env, "python", "rtc_sarsen.py",
                       "--zip", str(z), "--out-dir", str(SARSEN_OUT)]
+        if args.sarsen_tc_chunks:
+            sarsen_cmd += ["--tc-chunks", str(args.sarsen_tc_chunks)]
         sarsen_wall, sarsen_proc, _, sarsen_rc = run_worker(sarsen_cmd)
         sarsen_total, sarsen_real = raster_px(sarsen_out)
         print(f"    wall {sarsen_wall/60:.1f}분, process {sarsen_proc/60 if sarsen_proc else float('nan'):.1f}분, "
-              f"px {sarsen_total/1e6:.1f}M, {_pxps(sarsen_total, sarsen_proc)} Mpx/s")
+              f"px {sarsen_total/1e6:.1f}M, {_pxps(sarsen_total, sarsen_proc)} Mpx/s", flush=True)
+        if sarsen_rc != 0 or not sarsen_out.exists():
+            print(f"    ⚠️ sarsen 실패(rc={sarsen_rc}, 출력={'있음' if sarsen_out.exists() else '없음'}) "
+                  f"— 이 씬 건너뜀(SNAP 자동DEM 폴백 방지)", flush=True)
+            rows.append({"scene": z.stem[:24] + "…" + z.stem[-9:], "bucket": bucket_name.get(b, "?"),
+                         "size_mb": size_mb, "snap_wall_s": "", "snap_proc_s": "", "snap_px_M": "",
+                         "snap_real_pct": "", "snap_Mpxps": "", "snap_rc": "", "dem_clip_s": "",
+                         "sarsen_wall_s": round(sarsen_wall, 1), "sarsen_proc_s": "", "sarsen_px_M": "",
+                         "sarsen_Mpxps": "", "sarsen_rc": sarsen_rc, "frost_s": "", "sarsen_rtcfrost_s": "",
+                         "ratio_proc_sarsen_over_snap": "", "ratio_rtcfrost_sarsen_over_snap": ""})
+            continue
 
         # 2) SNAP DEM 준비(cop30 모드면 COP30 클립)
         dem_clip = None
         dem_clip_s = 0.0
         if args.snap_dem_mode == "cop30":
-            print("  - COP30 클립(SNAP external DEM) ...")
+            print("  - COP30 클립(SNAP external DEM) ...", flush=True)
             dem_clip, dem_clip_s = clip_cop30_from_output(sarsen_out, args.cop30_vrt)
-            print(f"    dem_clip {dem_clip_s:.1f}s -> {dem_clip.name if dem_clip else '실패'}")
+            print(f"    dem_clip {dem_clip_s:.1f}s -> {dem_clip.name if dem_clip else '실패'}", flush=True)
+            if dem_clip is None:
+                print("    ⚠️ COP30 클립 실패 — SNAP 건너뜀(자동DEM 폴백 금지)", flush=True)
+                continue
 
         # 3) SNAP RTC
         print("  - SNAP RTC ...")
