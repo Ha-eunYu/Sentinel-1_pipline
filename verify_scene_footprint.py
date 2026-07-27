@@ -26,13 +26,16 @@
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 from pathlib import Path
 
 import numpy as np
 import rasterio
 from rasterio.windows import Window
+
+# bbox 대신 footprint로 촬영 지역을 판정하는 로직은 footprint_aoi 모듈에 통합돼
+# 있다(FOOTPRINT_AOI_KR.md). 픽셀 단위 point-in-polygon도 거기서 가져다 쓴다.
+from footprint_aoi import load_exterior_rings, points_in_rings
 
 PROJECT_DIR = Path(__file__).resolve().parent
 GEOJSON_DIR = PROJECT_DIR / "geojson"
@@ -52,47 +55,6 @@ DEFAULT_SCENES = [
     PROJECT_DIR / "downloads" / "rtc_grd" /
     "S1D_IW_GRDH_1SDV_20260716T211654_20260716T211719_003704_006A0F_4C7C_COG_rtc_db.tif",
 ]
-
-
-def load_exterior_rings(geojson_path: Path) -> list[np.ndarray]:
-    """FeatureCollection/Feature/Geometry에서 모든 (Multi)Polygon 외곽 링을
-    Nx2(lon,lat) 배열 목록으로 추출(구멍은 무시 — 해안선 검증엔 충분)."""
-    data = json.loads(geojson_path.read_text(encoding="utf-8"))
-    if data.get("type") == "FeatureCollection":
-        geoms = [f["geometry"] for f in data["features"] if f.get("geometry")]
-    elif data.get("type") == "Feature":
-        geoms = [data["geometry"]]
-    else:
-        geoms = [data]
-    rings: list[np.ndarray] = []
-    for g in geoms:
-        if g["type"] == "Polygon":
-            rings.append(np.asarray(g["coordinates"][0], dtype="float64"))
-        elif g["type"] == "MultiPolygon":
-            for poly in g["coordinates"]:
-                rings.append(np.asarray(poly[0], dtype="float64"))
-    return rings
-
-
-def points_in_rings(lons: np.ndarray, lats: np.ndarray, rings: list[np.ndarray]) -> np.ndarray:
-    """벡터화 ray-casting. 점이 어느 링에든 들어가면 True (even-odd, 링별 OR)."""
-    inside = np.zeros(lons.shape, dtype=bool)
-    for ring in rings:
-        rx, ry = ring[:, 0], ring[:, 1]
-        n = len(ring)
-        j = n - 1
-        acc = np.zeros(lons.shape, dtype=bool)
-        for i in range(n):
-            xi, yi, xj, yj = rx[i], ry[i], rx[j], ry[j]
-            cond = ((yi > lats) != (yj > lats))
-            # 교차하는 세로 위치에서의 x
-            denom = (yj - yi)
-            denom = np.where(denom == 0, 1e-12, denom)
-            xints = (xj - xi) * (lats - yi) / denom + xi
-            acc ^= cond & (lons < xints)
-            j = i
-        inside |= acc
-    return inside
 
 
 def build_vrt(scenes: list[Path], tag: str) -> Path:

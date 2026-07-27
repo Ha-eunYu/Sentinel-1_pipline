@@ -110,3 +110,8 @@ point-in-polygon 대조했다.
    누락됐던 것)와 `7805`(7/20 궤도 008632의 8번째/최북단 프레임, 기존
    인벤토리에 없던 프레임). 반대로 `E265`(7/1)는 위도 42.4~44.3°N(만주)로
    교집합 0%임이 재확인돼 계속 제외된다.
+5. **완료(2026-07-27)**: bbox 대신 footprint로 촬영 지역을 판정하는 로직을
+   여러 파일에 흩어져 있던 것에서 재사용 모듈 [footprint_aoi.py](footprint_aoi.py)
+   하나로 통합하고, 배경·사용법을 [FOOTPRINT_AOI_KR.md](FOOTPRINT_AOI_KR.md)로
+   정리했다. `stac/search_s1.py`(`touches_korea`)와 `verify_scene_footprint.py`는
+   이제 이 모듈을 가져다 쓴다(동작 동일, 단일 출처).

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import re
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from stac.models import (
@@ -20,32 +18,16 @@ from stac.models import (
 # 진짜 한반도 프레임(예: 93DD, 제주 인근 5.27% 겹침)이 검색에서 통째로 누락되는
 # 문제를 발견 -> 검색은 느슨한 bbox로, 정확한 한반도 여부 판정은 이 실경계로
 # 분리했다(SCENE_FOOTPRINT_REAUDIT_KR.md와 동일한 검증 방법).
-_KOREA_PENINSULA_GEOJSON = Path(__file__).resolve().parent.parent / "geojson" / "Korea_Peninsula.geojson"
-_korea_union_cache = None
-
-
-def _korea_union():
-    """geojson/Korea_Peninsula.geojson(NK+SK)의 shapely union. 지연 로드 후 캐시."""
-    global _korea_union_cache
-    if _korea_union_cache is None:
-        from shapely.geometry import shape
-        from shapely.ops import unary_union
-
-        data = json.loads(_KOREA_PENINSULA_GEOJSON.read_text(encoding="utf-8"))
-        geoms = [shape(f["geometry"]) for f in data["features"]]
-        _korea_union_cache = unary_union(geoms)
-    return _korea_union_cache
+# bbox 대신 footprint로 촬영 지역을 판정하는 로직은 footprint_aoi 모듈에 통합돼
+# 있다(FOOTPRINT_AOI_KR.md 참조). 여기서는 STAC item용 얇은 어댑터만 둔다.
+from footprint_aoi import footprint_intersects
 
 
 def touches_korea(item) -> bool:
     """STAC item의 실제 footprint(item.geometry)가 한반도 실경계와 겹치는지.
-    교집합이 전혀 없으면(=완전히 중국/일본/공해) False."""
-    from shapely.geometry import shape
-
-    geom = getattr(item, "geometry", None)
-    if not geom:
-        return True  # geometry 정보가 없으면 판단 불가 -> 안전하게 통과시킴
-    return shape(geom).intersects(_korea_union())
+    교집합이 전혀 없으면(=완전히 중국/일본/공해) False. geometry가 없으면
+    판단 불가로 보고 안전하게 True(통과) — footprint_intersects의 규약."""
+    return footprint_intersects(getattr(item, "geometry", None))
 
 
 def _safe_get_str(properties: Dict[str, Any], *keys: str) -> Optional[str]:
