@@ -151,11 +151,11 @@ EGM96)이 각각 지형보정한 결과를 `compare_rtc.py`로 대조(SNAP을 sa
 두 도구 모두 **로컬 COP30(D:)** 로 같은 씬을 단독 처리(SNAP은 클립 GeoTIFF external,
 sarsen은 VRT 직접). SNAP은 파이프라인 표준 **10m**, sarsen은 COP30 native **~30m**.
 
-### 전체 표 (9장, cop30 모드, Frost 5×5 d2)
+### 측정치 (cop30 모드, Frost 5×5 d2)
 
 씬당 `process_s`(핵심 처리: SNAP=gpt 그래프, sarsen=지형보정+dB), 출력 픽셀수,
-throughput(Mpx/s)을 잰다. 9장 벤치마크 진행 중 — 표는 완료 후 `rtc_benchmark.csv`로
-채운다. **첫 씬(754B, 소버킷) 확정치**:
+throughput(Mpx/s)을 잰다. **대표 씬 754B(소버킷, 14초 짧은 씬) 확정치** — 9장 전체는
+**sarsen이 풀사이즈 씬에서 OOM/저속**이라 완주하지 못했다(§3.2, 이게 곧 결과):
 
 | 씬 | 도구 | process | wall | 출력 px | 유효 | throughput |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -184,36 +184,84 @@ throughput(Mpx/s)을 잰다. 9장 벤치마크 진행 중 — 표는 완료 후 
   무시할 수준. 단 SNAP이 external DEM 전체를 유효 처리하므로(자동 DEM처럼 건너뛰지
   않음) 10m 전체 처리 시간이 정직하게 다 든다.
 
-_9장 전체 표로 버킷(용량)별 경향까지 확인 후 위 결론을 정량 보강한다. IW GRD는
-파일 용량이 달라도 스와스 픽셀수가 비슷해, 용량보다 해상도·씬 길이가 시간을
-지배할 것으로 예상._
+### 3.2 sarsen 풀사이즈 IW GRD 메모리 한계 (중요 결과)
+
+9장(3버킷×3)을 목표로 했으나 **sarsen이 풀사이즈(약 25초, 26k×16k) IW GRD에서 막혔다**.
+754B(14초 짧은 씬)만 통과했고, 9A73·392D·3C22 등 정상 길이 씬은 두 지점에서 실패:
+
+1. **dask rechunk**: `chunking.simple_dask_map_overlap`이 `allow_rechunk=False`로,
+   overlap 깊이(128)보다 작은 첫 청크를 만나면 즉시 실패.
+2. **지오코딩 interp OOM**: `geocode_grd_chunk`의 `beta_nought.interp`가 SAR 격자
+   크기의 float64 배열(약 3.25GB)을 만들고, 여러 개가 겹쳐 **피크 ~22GB+** → 32GB
+   RAM(여유 ~22.8GB)에서 `numpy MemoryError`.
+
+`rtc_sarsen.py`에 방어책을 넣었다: (1) `map_overlap`을 sarsen 자체의 타일 구현
+`sync_map_overlap`으로 교체(rechunk 문제 회피), (2) `--tc-chunks`로 청크 축소.
+**`--tc-chunks 256`이면 OOM은 피한다(피크 14.5GB)** — 그러나 작은 청크 오버헤드로
+**매우 느리다**(754B 16분 대비 풀씬은 40분+에도 못 끝냄).
+
+**아키텍처 차이 = 이 파트의 핵심 결과**:
+
+- **SNAP**: JVM 타일 스케줄러가 디스크에서 타일을 스트리밍(`-c 14G` 캐시) → **임의
+  크기 씬을 제한된 메모리로** 처리. 풀씬 10m도 안정적으로 28분.
+- **sarsen**: full float64 그리드를 RAM에 적재 → **풀씬은 32GB에서 OOM**. 짧은 씬만
+  기본값으로 되고, 풀씬은 `--tc-chunks`로 겨우 되지만 느리다.
+
+**함의**: 현재 32GB 머신에서 **sarsen을 풀사이즈 IW GRD 생산에 쓰려면 RAM 증설
+(≈64GB)** 이 사실상 필요하다. 광역·저해상(30m) 짧은 씬이나 AOI 서브셋이면 지금도
+쓸 만하다. 정밀·대량·풀씬 처리는 SNAP이 확실히 유리(메모리·속도 모두).
+
+> 사용자 결정(2026-07-27): 9장 완주 대신 **754B 쌍 + 위 메모리 한계**로 결론을
+> 확정. sarsen 풀씬 완주는 RAM 증설 후 또는 필요 시 `--tc-chunks`로 별도 진행.
 
 ---
 
 ## 4. Part 3 — Frost 동일 하이퍼파라미터 총시간
 
-같은 Frost 설정(윈도우·damping 동일)에서:
+같은 Frost 설정(5×5, damping 2)에서 총 처리시간(754B):
 
-- (a) SNAP RTC + **SNAP Frost** (그래프 내부, `process_s`)
-- (b) sarsen RTC + **로컬 Frost**(`filtering.frost_filter`, `process_s + frost_s`)
+| 파이프라인 | 구성 | 총시간 |
+| --- | --- | --- |
+| SNAP | RTC + **SNAP Frost**(그래프 내부, 10m) | **27.9분** |
+| sarsen | RTC(16.4분) + **로컬 Frost**(`filtering.frost_filter` 5×5, 55.9s, 30m) | **17.3분** |
 
-측정 중(9장 벤치마크에 통합). 로컬 Frost는 754B(69.5M px)에서 약 59s로 확인됨.
+- 로컬 Frost(sarsen dB→linear→Frost→dB)는 69.5M px에서 **약 56초**로, sarsen 총시간에
+  ~6%만 더한다. 즉 "sarsen엔 스펙클 필터가 없다"는 약점은 로컬 `filtering/`로 값싸게
+  메운다(하이퍼파라미터도 SNAP과 동일하게 맞춤).
+- 결론은 Part 1과 같다: 같은 Frost라도 총시간 우열은 **출력 해상도(10m vs 30m)** 가
+  가른다. 30m로 맞추면 SNAP이 더 빠를 것.
+
+> 단 이 비교도 754B(짧은 씬) 기준이다. 풀씬은 sarsen이 §3.2 메모리 한계에 걸린다.
 
 ---
 
 ## 5. Part 4 — NGII 5m DEM vs COP30 (후속, 단독 실행)
 
-- DEM: `D:\00_DEM\DEM_5m\dcd_5m_dem.tif`(남한 5m). NGII는 **북한·치악산 미포함** →
-  **치악산 제외 남한 육상**에서만 비교(수체·해상 제외).
+- DEM: `D:\00_DEM\DEM_5m\dcd_5m_dem.tif` — 확인 결과 **EPSG:4326, ~5m(0.0000512°),
+  범위 lon 124.96–131.95 / lat 33.02–38.41, nodata −3.4e38**. 이미 지리좌표계라
+  **재투영 불필요**(씬 bbox 클립만). NGII는 **북한·치악산 미포함** → **치악산 제외
+  남한 육상**에서만 비교(수체·해상 제외). 정표고 기준이라 EGM 보정 적용.
 - 절차: 같은 씬을 (1) SNAP+NGII, (2) sarsen+NGII, (3) SNAP+COP30, (4) sarsen+COP30로
-  RTC. 처리시간(단독)·TC 기하품질·수체 탐지 정확도·γ0 dB 분포를 비교.
-- NGII는 투영좌표계(예: EPSG:5186)일 가능성 → WGS84 재투영·씬 bbox 클립 후 사용.
-  정표고 기준이라 EGM 보정 적용(NGII 수직계가 EGM2008과 미세하게 다른 점은 명시).
+  RTC → 처리시간(단독)·TC 기하품질·수체 탐지 정확도·γ0 dB 분포 비교.
+- 주의: sarsen+NGII도 풀씬이면 §3.2 메모리 한계에 걸리므로, **짧은 씬 또는
+  `--tc-chunks`/AOI 서브셋**으로 진행한다.
 
-본 파트는 Part 1–3 및 교차검증 종료 후 단독으로 진행한다.
+본 파트는 신규 씬 처리·water detection·7월 Frost 재처리 이후 **맨 마지막**에 진행한다.
 
 ---
 
 ## 6. 결론
 
-모든 파트 종료 후 기입.
+1. **SNAP 없이 sarsen으로 S1C RTC 가능**(검증 완료, [RTC_SARSEN_KR.md](RTC_SARSEN_KR.md)).
+   지오코딩은 SNAP과 **위치 완전 일치**(시프트 0), γ0 dB는 중앙값 **+0.96 dB** 차
+   (≈1 dB 오프셋만 감안하면 됨).
+2. **속도(754B)**: sarsen 16.4분(30m) vs SNAP 27.9분(10m). 절대시간은 sarsen이
+   빠르지만 이는 **더 거친 30m 격자**(픽셀 6.3배 적음) 덕분이고, **픽셀당 처리량은
+   SNAP이 3.7배 빠르다**. 같은 Frost를 걸어도(로컬 Frost +56s) 결론은 동일.
+3. **sarsen 풀사이즈 메모리 한계**: 정상 길이 IW GRD는 32GB에서 지오코딩 interp가
+   OOM. `--tc-chunks 256`으로 회피되나 느림. → **풀씬 대량 처리엔 SNAP, 혹은 RAM
+   증설(≈64GB) 후 sarsen**. 짧은 씬·AOI·30m 광역엔 sarsen도 실용적.
+4. **DEM 소스**: 자동 Copernicus(C:)는 육상 씬에서 정상(기존 파이프라인 문제 없음).
+   벤치마크는 두 도구에 **동일 DEM**을 주려고 로컬 COP30(D:)를 썼을 뿐.
+5. **권고**: SNAP을 못 쓰는 환경/광역 30m 수체탐지 → sarsen(SNAP-free)이 답.
+   정밀 10m·대량·풀씬 생산 → SNAP이 메모리·속도 모두 유리.
