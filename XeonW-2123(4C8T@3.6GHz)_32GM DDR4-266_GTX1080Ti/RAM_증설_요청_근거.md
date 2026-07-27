@@ -62,9 +62,12 @@
 
 - **RAM 64GB 이상으로 증설** 요청 (현재 32GB → 64GB, 가능하면 128GB)
 - 8슬롯 중 2개만 사용 중이므로 **기존 모듈 교체 없이 추가 장착만으로 증설 가능**
-  (동일 규격 DDR4-2666 RDIMM/UDIMM 확인 필요)
-- 기대 효과: 씬 병렬 처리 가능(배치 전체 처리 시간 대폭 단축), 타일 캐시 확대로
-  씬당 처리 속도 개선, SLC(더 무거운 처리) 배치도 안정적으로 처리 가능
+- **호환 메모리(Dell 확인, Case (생략) / Service Tag (생략), 2024-07-15)**:
+  Xeon W CPU라 **ECC Registered DIMM(RDIMM) 필수**(UDIMM 불가). 권장 부품
+  **HYNIX `HMAA8GR7AJR4N-XN`**(16GB DDR4 ECC RDIMM). 32→64GB는 2개, →128GB는 6개 추가.
+- 기대 효과: sarsen 풀씬 RTC 가능(현재 32GB에선 OOM), 타일 캐시 확대로 씬당 처리
+  개선, 씬 병렬(부분 — 물리코어 4개 한계로 ~1.3–1.6배), SLC(더 무거움) 안정 처리.
+  씬당 속도 자체는 CPU 코어가 좌우 → 상세는 [HW_UPGRADE_SPEEDUP_KR.md](HW_UPGRADE_SPEEDUP_KR.md).
 
 ---
 

@@ -51,3 +51,13 @@ temp/
 
 # MinIO / cache / misc
 .cache/
+
+# third-party sources obtained externally (installed via pip; not versioned here)
+sarsen-main/
+sarsen-0.9.6/
+sarsen-0.9.6.tar.gz
+xarray-sentinel-main/
+sardem-sarsen-main/
+
+# raw support emails (personal info: address, Dell case)
+*.eml
