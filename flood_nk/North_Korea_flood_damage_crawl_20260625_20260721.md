@@ -220,45 +220,74 @@
 
 ## 4A. 중요 기사 이미지 레퍼런스 *(갱신)*
 
-중요 기사에 게재된 이미지를 출처·저작권과 함께 별도 정리한다. **사진 권리는 각 매체·연합뉴스·기상청·SPN에 있으며, 아래는 원문 링크·출처를 명시한 참조 목록이다.**
+중요 기사에 게재된 이미지를 **본문에 직접 임베드**하고 출처·저작권을 함께 표기한다. 모든 URL은 2026-07-27 기준 HTTP 200(정상 접근) 확인됨. **사진 권리는 각 매체·연합뉴스·기상청·SPN에 있으며, 아래는 원문 출처를 명시한 참조다.**
 
-> ⚠️ **사진 provenance 주의(본문 6장 4항 참조):** 일부 사진은 2026년 현장이 아닌 **자료사진(파일 사진)** 이거나 남측 군남댐 방류 장면이다. 북한 내부 피해 현장 사진으로 오용하지 말 것.
+> ⚠️ **사진 provenance 주의(본문 6장 4항 참조):** 아래 수문 사진은 2026년 북한 현장이 아니라 **남측 군남댐 방류 장면**이거나 **자료사진(파일 사진)** 이다. 북한 내부 피해 현장 사진으로 오용하지 말 것.
+>
+> 🖼 **이미지가 안 보이면:** 오프라인·사내망 등에서 외부 CDN 접근이 차단되면 렌더링되지 않을 수 있다. 각 이미지 아래 **[원본 이미지] 직접 링크**를 함께 두었으니 브라우저에서 열어 확인할 수 있다.
 
-### 4A.1 수문 사건(황강댐·필승교·군남댐) 관련 — 07-20~22
+### 4A.1 수문 사건(황강댐·필승교·군남댐) — 07-20~22
 
-| 날짜 | 매체 | 이미지 URL | 캡션·설명 | 촬영 성격 |
-|---|---|---|---|---|
-| 07-21 | MBC | `https://image.imnews.imbc.com/news/2026/society/article/__icsFiles/afieldfile/2026/07/21/yn20260720-04.jpg` | "북한, 임진강 황강댐 방류…접경지역 피해 없도록 대응" | 기사 대표 이미지 |
-| 07-21 | 서울신문(연합뉴스) | `https://img.seoul.co.kr/img/upload/2026/07/21/SSC_20260721234833_O2.jpg` | 21일 오후 경기 연천 **군남홍수조절댐 방류** 장면 | **남측 군남댐** 실사(2026-07-21) |
-| 07-21 | 데일리안(연합뉴스) | `https://cdnimage.dailian.co.kr/news/202510/news_1760249080_1558534_m_1.jpg` | 군남홍수조절댐 방류(**자료사진**) | ⚠️ **자료사진**(2026 현장 아님) |
+**① 황강댐 방류 (MBC, 07-21)**
 
-- 위 3장은 모두 **남측 군남댐 방류** 또는 자료사진으로, **북한 내부 침수 사진이 아니다.**
-- 원문: [MBC](https://imnews.imbc.com/news/2026/society/article/6838763_36918.html) · [서울신문](https://www.seoul.co.kr/news/society/2026/07/22/20260722001007) · [데일리안](https://www.dailian.co.kr/news/view/1668968)
+![북한 임진강 황강댐 방류 - MBC](https://image.imnews.imbc.com/news/2026/society/article/__icsFiles/afieldfile/2026/07/21/yn20260720-04.jpg)
 
-### 4A.2 북한 재해 예방·경보 관련 — SPN(기상청)
+*캡션: "북한, 임진강 황강댐 방류…접경지역 피해 없도록 대응" (기사 대표 이미지) · [원본 이미지](https://image.imnews.imbc.com/news/2026/society/article/__icsFiles/afieldfile/2026/07/21/yn20260720-04.jpg) · [기사 원문](https://imnews.imbc.com/news/2026/society/article/6838763_36918.html)*
 
-| 날짜 | 이미지 URL | 캡션·설명 | 원문 |
-|---|---|---|---|
-| 07-04 | `https://cdn.spnews.co.kr/news/photo/202607/108657_110440_5846.jpg` | **흥주청년1호발전소 큰물 피해 예방 점검** | [108657](https://www.spnews.co.kr/news/articleView.html?idxno=108657) |
-| 07-04 | `https://cdn.spnews.co.kr/news/photo/202607/108657_110441_433.jpg` | **상원군 장마철 피해 방지 작업** | [108657](https://www.spnews.co.kr/news/articleView.html?idxno=108657) |
-| 07-07 | `https://cdn.spnews.co.kr/news/photo/202607/108725_110525_3127.png` | 북한 폭우·많은 비 주의경보 개황 | [108725](https://www.spnews.co.kr/news/articleView.html?idxno=108725) |
-| 07-07 | `https://cdn.spnews.co.kr/news/photo/202607/108725_110526_209.jpg` | 평양 철길대 재해 대응 점검 | [108725](https://www.spnews.co.kr/news/articleView.html?idxno=108725) |
+**② 군남홍수조절댐 방류 (서울신문/연합뉴스, 07-21 오후) — 남측 실사**
 
-### 4A.3 주요 강우일 기상 개황도 — SPN(기상청)
+![경기 연천 군남홍수조절댐 방류 - 서울신문/연합뉴스](https://img.seoul.co.kr/img/upload/2026/07/21/SSC_20260721234833_O2.jpg)
 
-각 기상도는 클릭 시 해당 SPN 원문으로 이동. 아래 URL은 직접 참조용.
+*캡션: 21일 오후 경기 연천 군남홍수조절댐 방류 장면(집중호우+황강댐 방류로 임진강 수위 상승). **남측 군남댐 실사(2026-07-21).** · [원본 이미지](https://img.seoul.co.kr/img/upload/2026/07/21/SSC_20260721234833_O2.jpg) · [기사 원문](https://www.seoul.co.kr/news/society/2026/07/22/20260722001007)*
 
-| 날짜 | 이미지 URL | 예상 강수 요약 |
-|---|---|---|
-| 07-06 | `https://cdn.spnews.co.kr/news/photo/202607/108690_110477_1145.png` | 평안·함남·황해 30~80, 평북 곳 100↑ |
-| 07-08 | `https://cdn.spnews.co.kr/news/photo/202607/108751_110562_5829.png` | 평안·함남·황해 50~100, 곳 150↑ |
-| 07-10 | `https://cdn.spnews.co.kr/news/photo/202607/108823_110650_5830.png` | 평안·황해 50~100, 곳 150↑ |
-| 07-14 | `https://cdn.spnews.co.kr/news/photo/202607/108923_110779_719.png` | 태풍 바비, 평남·함남·황해 곳 150↑ |
-| 07-18 | `https://cdn.spnews.co.kr/news/photo/202607/109026_110914_622.png` | 함남 곳 150↑, 평남·황해 곳 100↑ |
-| 07-20 | `https://cdn.spnews.co.kr/news/photo/202607/109052_110955_1750.png` | 함남·황해 곳 150↑, 황강댐 방류일 |
-| 07-21 | `https://cdn.spnews.co.kr/news/photo/202607/109086_110996_5431.png` | 함남·황해 50~150, 곳 250↑(최고 위험) |
+**③ 군남댐 방류 (데일리안/연합뉴스) — ⚠️ 자료사진**
 
-> 07-22~26 SPN 기상도(idxno 109124·109172·109198·109235·109256) 및 07-27 KMA 도별 관측 이미지는 CDN URL 미수집 상태(추후 보완). 일자별 원문 링크는 [SPN 날씨 파일](SPN_오늘의_북한날씨_20260625_20260721.md) 참조.
+![군남홍수조절댐 방류 자료사진 - 데일리안/연합뉴스](https://cdnimage.dailian.co.kr/news/202510/news_1760249080_1558534_m_1.jpg)
+
+*캡션: 군남홍수조절댐 방류(**자료사진, 2026 현장 아님**). · [원본 이미지](https://cdnimage.dailian.co.kr/news/202510/news_1760249080_1558534_m_1.jpg) · [기사 원문](https://www.dailian.co.kr/news/view/1668968)*
+
+> 위 3장은 전부 **남측 군남댐 방류 또는 자료사진**으로, 북한 내부 침수 사진이 아니다.
+> VOA(최대 372.6 mm 기사)는 HTTP 403으로 이미지 미수집, 연합뉴스 원문(yna.co.kr)은 접근 차단으로 재전재본으로 대체.
+
+### 4A.2 북한 재해 예방·경보 (SPN/기상청)
+
+**① 흥주청년1호발전소 큰물 피해 예방 점검 (07-04)**
+
+![흥주청년1호발전소 큰물 피해 예방 점검](https://cdn.spnews.co.kr/news/photo/202607/108657_110440_5846.jpg)
+
+*[원본](https://cdn.spnews.co.kr/news/photo/202607/108657_110440_5846.jpg) · [기사 108657](https://www.spnews.co.kr/news/articleView.html?idxno=108657)*
+
+**② 상원군 장마철 피해 방지 작업 (07-04)**
+
+![상원군 장마철 피해 방지 작업](https://cdn.spnews.co.kr/news/photo/202607/108657_110441_433.jpg)
+
+*[원본](https://cdn.spnews.co.kr/news/photo/202607/108657_110441_433.jpg) · [기사 108657](https://www.spnews.co.kr/news/articleView.html?idxno=108657)*
+
+**③ 폭우·많은 비 주의경보 개황 (07-07)**
+
+![북한 폭우·많은 비 주의경보 개황](https://cdn.spnews.co.kr/news/photo/202607/108725_110525_3127.png)
+
+*[원본](https://cdn.spnews.co.kr/news/photo/202607/108725_110525_3127.png) · [기사 108725](https://www.spnews.co.kr/news/articleView.html?idxno=108725)*
+
+**④ 평양 철길대 재해 대응 점검 (07-07)**
+
+![평양 철길대 재해 대응 점검](https://cdn.spnews.co.kr/news/photo/202607/108725_110526_209.jpg)
+
+*[원본](https://cdn.spnews.co.kr/news/photo/202607/108725_110526_209.jpg) · [기사 108725](https://www.spnews.co.kr/news/articleView.html?idxno=108725)*
+
+### 4A.3 주요 강우일 기상 개황도 (SPN/기상청)
+
+주요 강우일 기상도는 [4장](#4-주요-강우일-기상도)에 이미 임베드되어 있다(07-06·08·10·14·18·20·21). 아래는 직접 참조용 원본 링크 모음이다.
+
+- 07-06 [원본](https://cdn.spnews.co.kr/news/photo/202607/108690_110477_1145.png) — 평안·함남·황해 30~80, 평북 곳 100↑
+- 07-08 [원본](https://cdn.spnews.co.kr/news/photo/202607/108751_110562_5829.png) — 평안·함남·황해 50~100, 곳 150↑
+- 07-10 [원본](https://cdn.spnews.co.kr/news/photo/202607/108823_110650_5830.png) — 평안·황해 50~100, 곳 150↑
+- 07-14 [원본](https://cdn.spnews.co.kr/news/photo/202607/108923_110779_719.png) — 태풍 바비, 평남·함남·황해 곳 150↑
+- 07-18 [원본](https://cdn.spnews.co.kr/news/photo/202607/109026_110914_622.png) — 함남 곳 150↑, 평남·황해 곳 100↑
+- 07-20 [원본](https://cdn.spnews.co.kr/news/photo/202607/109052_110955_1750.png) — 함남·황해 곳 150↑, 황강댐 방류일
+- 07-21 [원본](https://cdn.spnews.co.kr/news/photo/202607/109086_110996_5431.png) — 함남·황해 50~150, 곳 250↑(최고 위험)
+
+> 07-22~26 SPN 기상도(idxno 109124·109172·109198·109235·109256) 및 07-27 KMA 도별 관측 이미지는 CDN URL 미수집(추후 보완). 일자별 원문 링크는 [SPN 날씨 파일](SPN_오늘의_북한날씨_20260625_20260721.md) 참조.
 
 ---
 
