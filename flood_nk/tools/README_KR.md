@@ -15,11 +15,29 @@ PowerShell/터미널에서 한글 출력이 깨지면 `PYTHONIOENCODING=utf-8` �
 | 명령 | 설명 |
 |---|---|
 | `python nk_crawl.py sources` | 검증된 출처 레퍼런스(접근 가능/차단 표시) |
+| `python nk_crawl.py latest -n 3 --md` | **idxno 몰라도** 최신 날씨 기사 자동 탐색 |
+| `python nk_crawl.py scan --from A --to B --md` | idxno 구간을 스캔해 날씨 기사만 수집 |
 | `python nk_crawl.py spn <idxno...>` | SPN 「오늘의 북한 날씨」 파싱(날짜·강수·기온·이미지) |
 | `python nk_crawl.py spn <idxno...> --md` | 결과를 마크다운 표로 |
 | `python nk_crawl.py spn <idxno...> --json` | JSON(전체 필드: summary 포함) |
 | `python nk_crawl.py spn <idxno...> --check-images` | 파싱 + 이미지 HTTP 200 검증 |
 | `python nk_crawl.py verify <img_url...>` | 이미지 URL 접근성만 검증 |
+
+`--md`/`--json`/`--check-images`는 `latest`·`scan`·`spn` 공통.
+
+### idxno를 모를 때 (권장 시작점)
+```bash
+# A. 완전 자동: 사이트 최신 idxno에서 아래로 스캔해 최신 날씨 N건
+python nk_crawl.py latest -n 3 --md --check-images
+
+# B. 마지막 수집분을 알면 구간 스캔이 더 빠르고 확실
+python nk_crawl.py scan --from 109257 --to 109300 --md
+```
+- `latest`는 SPN 검색 목록이 날씨를 못 거르므로(전 분야 최신 혼합), **최대 idxno에서
+  아래로 한 건씩 조회**해 제목에 '날씨'가 있는 기사만 모은다(`--max-scan` 기본 120).
+- 날씨 기사는 하루 1건, idxno 간격이 수십이라 `latest`는 요청이 다소 많다.
+  마지막 수집 idxno를 알면 `scan --from <그 번호+1> --to <최근>`이 빠르다.
+- 검증: 2026-07-27=109271, 07-28=109297, 07-29 자동 탐색 확인(2026-07-29).
 
 ## 예시
 ```bash

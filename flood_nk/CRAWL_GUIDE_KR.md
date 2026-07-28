@@ -123,11 +123,16 @@ flood_nk/
 ```bash
 # 이 환경의 python: C:/Users/chlwn/miniconda3/python.exe
 python nk_crawl.py sources                       # 검증된 출처 목록
-python nk_crawl.py spn 109256                     # SPN 기사 1건 파싱
-python nk_crawl.py spn 109124 109256 --md         # 여러 건 → 마크다운 표
+python nk_crawl.py latest -n 3 --md               # idxno 몰라도 최신 날씨 자동
+python nk_crawl.py scan --from 109257 --to 109300 --md   # 구간 스캔(빠름·확실)
+python nk_crawl.py spn 109124 109256 --md         # idxno 직접 지정
 python nk_crawl.py spn 109256 --check-images      # 파싱 + 이미지 200 검증
 python nk_crawl.py verify <img_url> ...           # 이미지 URL만 접근성 검증
 ```
+
+- **idxno를 모르면 `latest`** (사이트 최신 idxno→아래 스캔) 또는 마지막 수집
+  번호를 아는 경우 **`scan --from <그 번호+1> --to <최근>`** 이 빠르다.
+  SPN 검색 목록은 날씨를 신뢰성 있게 못 걸러 idxno 스캔 방식을 쓴다.
 
 - SPN 기사에서 **날짜·주요날씨·지역별 강수량·평양/삼지연 기온·이미지 URL**을
   자동 추출(EUC-KR 디코딩 포함). 검증: 07-22~26 5건이 수작업 값과 일치.

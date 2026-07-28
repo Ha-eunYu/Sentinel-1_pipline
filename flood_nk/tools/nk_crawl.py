@@ -214,9 +214,53 @@ def parse_spn_weather(html: str, idxno, url: str) -> SpnWeather:
         samjiyon_temp=temps.get("삼지연", ""), images=images)
 
 
-def fetch_spn(idxno) -> SpnWeather:
+def fetch_spn(idxno, timeout: int = 20) -> SpnWeather:
     url = spn_url(idxno)
-    return parse_spn_weather(http_get(url), idxno, url)
+    return parse_spn_weather(http_get(url, timeout=timeout), idxno, url)
+
+
+def spn_site_max_idxno(timeout: int = 20) -> int | None:
+    """SPN 목록 페이지에서 현재 최신(최대) idxno를 얻는다.
+
+    SPN 검색 목록은 날씨 기사를 신뢰성 있게 필터하지 못하지만(전 분야 최신이
+    섞임), 최대 idxno는 안정적으로 제공한다. 이를 스캔 시작점으로 쓴다.
+    """
+    html = http_get(SOURCES["spn"]["list"], timeout=timeout)
+    ids = [int(x) for x in re.findall(r'idxno=(\d+)', html)]
+    return max(ids) if ids else None
+
+
+def is_weather(w: "SpnWeather") -> bool:
+    return "날씨" in (w.title or "")
+
+
+def collect_spn_weather(idxnos, limit: int | None = None,
+                        timeout: int = 20) -> list:
+    """주어진 idxno 순서대로 fetch해 '오늘의 북한 날씨' 기사만 수집."""
+    out = []
+    for idx in idxnos:
+        try:
+            w = fetch_spn(idx, timeout=timeout)
+        except Exception:  # noqa: BLE001
+            continue
+        if is_weather(w):
+            out.append(w)
+            if limit and len(out) >= limit:
+                break
+    return out
+
+
+def spn_latest(limit: int = 3, timeout: int = 20, max_scan: int = 120) -> list:
+    """사이트 최신 idxno에서 아래로 스캔해 최근 날씨 기사 `limit`건을 반환.
+
+    idxno를 몰라도 자동으로 최신 날씨 기사를 찾는다. 날씨 기사는 하루 1건,
+    idxno 간격이 크므로(수십) 최대 `max_scan`건까지만 조회한다.
+    """
+    top = spn_site_max_idxno(timeout)
+    if not top:
+        return []
+    return collect_spn_weather(range(top, top - max_scan, -1),
+                               limit=limit, timeout=timeout)
 
 
 # --------------------------------------------------------------------------- #
@@ -242,26 +286,19 @@ def _cmd_verify(a):
     return 0 if all(r["ok"] for r in rows) else 1
 
 
-def _cmd_spn(a):
-    results = []
-    for idxno in a.idxno:
-        try:
-            w = fetch_spn(idxno)
-        except Exception as e:  # noqa: BLE001
-            print(f"[ERR] idxno={idxno}: {e}", file=sys.stderr)
-            continue
-        results.append(w)
-        if a.check_images:
-            w_imgs = [check_image(u, a.timeout) for u in w.images]
-            for r in w_imgs:
+def _emit(results, a):
+    """SpnWeather 목록을 옵션(--check-images/--md/--json/기본)대로 출력."""
+    if getattr(a, "check_images", False):
+        for w in results:
+            for r in (check_image(u, a.timeout) for u in w.images):
                 print(f"    img [{'OK' if r['ok'] else 'FAIL'}] "
                       f"{r['status']} {r['bytes']}b {r['url']}")
-    if a.md:
+    if getattr(a, "md", False):
         print("| 날짜 | 주요 날씨 | 예상 강수량 요약 | 낮 최고기온 |")
         print("|---|---|---|---|")
         for w in results:
             print(w.md_row())
-    elif a.json:
+    elif getattr(a, "json", False):
         print(json.dumps([asdict(w) for w in results],
                          ensure_ascii=False, indent=2))
     else:
@@ -272,6 +309,39 @@ def _cmd_spn(a):
             print(f"  기온: 평양 {w.pyongyang_temp}℃ / 삼지연 {w.samjiyon_temp}℃")
             print(f"  이미지: {w.images[0] if w.images else '-'}")
             print(f"  원문: {w.url}")
+
+
+def _cmd_spn(a):
+    results = []
+    for idxno in a.idxno:
+        try:
+            results.append(fetch_spn(idxno, timeout=a.timeout))
+        except Exception as e:  # noqa: BLE001
+            print(f"[ERR] idxno={idxno}: {e}", file=sys.stderr)
+    _emit(results, a)
+    return 0
+
+
+def _cmd_latest(a):
+    print(f"[..] 사이트 최신 idxno에서 아래로 최대 {a.max_scan}건 스캔 중"
+          f"(날씨 {a.n}건 목표)…", file=sys.stderr)
+    results = spn_latest(a.n, timeout=a.timeout, max_scan=a.max_scan)
+    if not results:
+        print(f"최근 {a.max_scan} idxno에서 날씨 기사를 못 찾음. "
+              f"--max-scan을 늘리거나 scan 명령을 쓰세요.", file=sys.stderr)
+        return 1
+    _emit(results, a)
+    return 0
+
+
+def _cmd_scan(a):
+    lo, hi = sorted((a.from_, a.to))
+    print(f"[..] idxno {lo}~{hi} 스캔 중(날씨 기사만 수집)…", file=sys.stderr)
+    results = collect_spn_weather(range(hi, lo - 1, -1), timeout=a.timeout)
+    if not results:
+        print("해당 구간에 날씨 기사 없음.", file=sys.stderr)
+        return 1
+    _emit(results, a)
     return 0
 
 
@@ -295,6 +365,26 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
     s.add_argument("--check-images", action="store_true", help="이미지도 검증")
     s.set_defaults(func=_cmd_spn)
+
+    l = sub.add_parser("latest",
+                       help="idxno 몰라도 최신 날씨 기사 자동 탐색(사이트 최신→아래 스캔)")
+    l.add_argument("-n", type=int, default=3, help="가져올 날씨 기사 수(기본 3)")
+    l.add_argument("--max-scan", type=int, default=120,
+                   help="최대 조회 idxno 수(기본 120)")
+    l.add_argument("--md", action="store_true", help="마크다운 표로 출력")
+    l.add_argument("--json", action="store_true")
+    l.add_argument("--check-images", action="store_true", help="이미지도 검증")
+    l.set_defaults(func=_cmd_latest)
+
+    sc = sub.add_parser("scan",
+                        help="idxno 구간을 스캔해 날씨 기사만 수집(빠르고 확실)")
+    sc.add_argument("--from", dest="from_", type=int, required=True,
+                    help="시작 idxno(예: 마지막 수집분+1)")
+    sc.add_argument("--to", type=int, required=True, help="끝 idxno")
+    sc.add_argument("--md", action="store_true", help="마크다운 표로 출력")
+    sc.add_argument("--json", action="store_true")
+    sc.add_argument("--check-images", action="store_true", help="이미지도 검증")
+    sc.set_defaults(func=_cmd_scan)
     return p
 
 
