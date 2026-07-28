@@ -107,11 +107,34 @@ done
 ```
 flood_nk/
 ├─ CRAWL_GUIDE_KR.md                              (이 문서)
+├─ tools/
+│  ├─ nk_crawl.py                                 (재사용 크롤링 툴킷, stdlib)
+│  └─ README_KR.md                                (툴 사용법)
 ├─ SPN_오늘의_북한날씨_20260625_20260721.md         (일자별 날씨)
 ├─ North_Korea_flood_damage_crawl_20260625_20260721.md  (기사+경보+이미지)
 └─ NK_FLOOD_WEATHER_INTEGRATED_20260625_20260721_KR.md   (통합 타임라인)
    (K-water PDF「북한 도별 기상」은 별도 수신 시 여기 보관)
 ```
+
+### 5.1 재사용 코드 `tools/nk_crawl.py`
+
+수작업 절차 일부를 자동화한 표준 라이브러리 전용 모듈(별도 설치 불필요).
+
+```bash
+# 이 환경의 python: C:/Users/chlwn/miniconda3/python.exe
+python nk_crawl.py sources                       # 검증된 출처 목록
+python nk_crawl.py spn 109256                     # SPN 기사 1건 파싱
+python nk_crawl.py spn 109124 109256 --md         # 여러 건 → 마크다운 표
+python nk_crawl.py spn 109256 --check-images      # 파싱 + 이미지 200 검증
+python nk_crawl.py verify <img_url> ...           # 이미지 URL만 접근성 검증
+```
+
+- SPN 기사에서 **날짜·주요날씨·지역별 강수량·평양/삼지연 기온·이미지 URL**을
+  자동 추출(EUC-KR 디코딩 포함). 검증: 07-22~26 5건이 수작업 값과 일치.
+- **이미지 임베드 전** `verify`/`--check-images`로 HTTP 200 확인(3.4절 대체).
+- 한계: og:description 길이제한 → 본문 태그제거로 보완하지만, 파서 정규식은
+  사이트 구조 변경 시 조정 필요. 조선중앙TV/통일뉴스 등 개별 기사는 아직
+  수동(WebFetch) — SPN 날씨가 가장 정형화돼 우선 자동화함.
 
 ---
 
