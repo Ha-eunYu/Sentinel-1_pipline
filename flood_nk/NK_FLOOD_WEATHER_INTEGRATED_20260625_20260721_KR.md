@@ -189,7 +189,7 @@
 - 압록강·두만강·임진강 수위 및 방류 자료
 - 농경지 침수면적 변화, 철도·도로·교량 단절 여부, 야간조도·전력시설 변화
 
-→ 본 프로젝트의 홍수 탐지 파이프라인(`detect_flood_grd*.py`, `build_water_per_date*.py`, `split_flood_area_nk_sk.py`)과 위 위험 지역·시점을 매칭해 검증 대상 장면을 선정.
+→ **외부 SAR 파이프라인**(별도 위성 처리 저장소의 `detect_flood_grd*.py`, `build_water_per_date*.py`, `split_flood_area_nk_sk.py` 등 — 본 크롤링 패키지에는 미포함)과 위 위험 지역·시점을 매칭해 검증 대상 장면을 선정. 이 문서는 그 파이프라인에 넘길 **입력(위험 지역·시점·경보)** 을 제공한다.
 
 ---
 

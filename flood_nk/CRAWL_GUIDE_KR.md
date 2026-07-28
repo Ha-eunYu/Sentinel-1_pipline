@@ -4,7 +4,7 @@
 > 목적: 다음 조사 주기에도 **같은 절차·같은 출처**로 시의적절하게 북한 홍수·기상
 > 자료를 수집·정리하기 위한 표준 작업 지침. `flood_nk/` 폴더의 세 산출물을
 > 갱신하는 방법을 정의한다.
-> 최초 작성: 2026-07-28 · 담당 산출물은 [4장](#4-폴더-산출물-구조) 참조.
+> 최초 작성: 2026-07-28 · 담당 산출물은 [5장](#5-폴더-산출물-구조) 참조.
 
 ---
 
@@ -108,26 +108,32 @@ done
 flood_nk/
 ├─ CRAWL_GUIDE_KR.md                              (이 문서)
 ├─ tools/
-│  ├─ nk_crawl.py                                 (재사용 크롤링 툴킷, stdlib)
-│  └─ README_KR.md                                (툴 사용법)
+│  ├─ nkcrawl/                                    (재사용 크롤링 패키지, stdlib)
+│  │  ├─ __init__.py  __main__.py  cli.py
+│  │  ├─ sources.py   http.py      spn.py
+│  ├─ nk_crawl.py                                 (얇은 CLI 래퍼, 하위호환)
+│  └─ README_KR.md                                (툴 사용법·라이브러리 API)
 ├─ SPN_오늘의_북한날씨_20260625_20260721.md         (일자별 날씨)
 ├─ North_Korea_flood_damage_crawl_20260625_20260721.md  (기사+경보+이미지)
 └─ NK_FLOOD_WEATHER_INTEGRATED_20260625_20260721_KR.md   (통합 타임라인)
    (K-water PDF「북한 도별 기상」은 별도 수신 시 여기 보관)
 ```
 
-### 5.1 재사용 코드 `tools/nk_crawl.py`
+### 5.1 재사용 코드 `tools/nkcrawl/` (+ `nk_crawl.py` 래퍼)
 
-수작업 절차 일부를 자동화한 표준 라이브러리 전용 모듈(별도 설치 불필요).
+수작업 절차 일부를 자동화한 **표준 라이브러리 전용 패키지**(별도 설치 불필요).
+CLI(`nk_crawl.py` 또는 `python -m nkcrawl`)와 라이브러리(`import nkcrawl`) 겸용.
+자세한 API·구조는 `tools/README_KR.md` 참조.
 
 ```bash
-# 이 환경의 python: C:/Users/chlwn/miniconda3/python.exe
-python nk_crawl.py sources                       # 검증된 출처 목록
+# 환경에 맞는 python 사용(stdlib만 필요). tools/ 폴더에서 실행.
+python nk_crawl.py sources                        # 검증된 출처 목록
 python nk_crawl.py latest -n 3 --md               # idxno 몰라도 최신 날씨 자동
 python nk_crawl.py scan --from 109257 --to 109300 --md   # 구간 스캔(빠름·확실)
 python nk_crawl.py spn 109124 109256 --md         # idxno 직접 지정
 python nk_crawl.py spn 109256 --check-images      # 파싱 + 이미지 200 검증
 python nk_crawl.py verify <img_url> ...           # 이미지 URL만 접근성 검증
+# 동치: python -m nkcrawl <cmd> …  /  라이브러리: import nkcrawl
 ```
 
 - **idxno를 모르면 `latest`** (사이트 최신 idxno→아래 스캔) 또는 마지막 수집
@@ -138,7 +144,7 @@ python nk_crawl.py verify <img_url> ...           # 이미지 URL만 접근성 �
   자동 추출(EUC-KR 디코딩 포함). 검증: 07-22~26 5건이 수작업 값과 일치.
 - **이미지 임베드 전** `verify`/`--check-images`로 HTTP 200 확인(3.4절 대체).
 - 한계: og:description 길이제한 → 본문 태그제거로 보완하지만, 파서 정규식은
-  사이트 구조 변경 시 조정 필요. 조선중앙TV/통일뉴스 등 개별 기사는 아직
+  사이트 구조 변경 시 `nkcrawl/spn.py`의 `_RE_*`를 조정. 조선중앙TV/통일뉴스 등 개별 기사는 아직
   수동(WebFetch) — SPN 날씨가 가장 정형화돼 우선 자동화함.
 
 ---
