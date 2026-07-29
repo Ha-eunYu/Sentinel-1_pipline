@@ -46,10 +46,11 @@ except Exception:
     pass
 
 PROJ = Path(__file__).resolve().parent
-GPKG = PROJ / "flood_nk_20260725.gpkg"
-WDIR = PROJ / "downloads" / "water_otsu"
+NK_DIR = PROJ / "flood_nk_water_area"          # 문서·데이터 정리 폴더(2026-07-29)
+GPKG = NK_DIR / "flood_nk_20260725.gpkg"
+WDIR = PROJ / "downloads" / "water_otsu"        # 날짜·궤도별 water map은 여기 유지
 SCENE_WATER = PROJ / "downloads" / "water" / "scene_water"
-OUT_CSV = WDIR / "nk_water_before_after_20260725.csv"
+OUT_CSV = NK_DIR / "nk_water_before_after_20260725.csv"
 
 # 지역·관측별 override: (지역, 관측키) -> scene_water 상대경로.
 # 관측키: "after" | "date_1" | "date_2".

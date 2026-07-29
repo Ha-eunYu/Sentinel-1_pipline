@@ -29,8 +29,8 @@ cfg = S1SearchConfig(
     product_type=None,
     polarization=None,
 )
-TARGET = "2026-07-26"     # 이 날짜 근접순
-MAX_DOWNLOADS = 6         # 신규 6장(7/26 1 + 7/25 5)
+TARGET = "2026-07-28"     # 이 날짜 근접순
+MAX_DOWNLOADS = 6         # 신규 6장(7/28 1 + 7/27 5)
 
 client = open_cdse_stac_client(cdse)
 res = list_s1_items_for_date(client, TARGET, cfg)

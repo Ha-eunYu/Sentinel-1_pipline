@@ -3,8 +3,8 @@
 SNAP을 설치할 수 없는 환경에서 Sentinel-1 GRD를 RTC(γ0)/GTC로 지형보정하는
 방법. ESA SNAP의 Terrain-Flattening + Terrain-Correction을 순수 파이썬
 ([sarsen](https://github.com/bopen/sarsen) + xarray-sentinel + rasterio)으로
-대체한다. 스크립트: [rtc_sarsen.py](rtc_sarsen.py). 실행 환경: conda `sarsen_clean`
-(sarsen 0.9.3).
+대체한다. 스크립트: [rtc_sarsen.py](../rtc_sarsen.py). 실행 환경: conda `sarsen_clean`
+(sarsen 0.9.6 + xarray-sentinel main — S1C/D 지원 필수, §B).
 
 ## 왜 sarsen인가 / 대안 비교
 
@@ -163,8 +163,10 @@ S1C_..._754B_..._rtc_db.tif`:
   r 0.88(스펙클 미필터+해상도차 감안 예상 범위). 상세는
   [RTC_BENCHMARK_KR.md](RTC_BENCHMARK_KR.md) §2.5. → 고정 −16dB 탐지 전 ~1 dB
   오프셋만 반영(또는 Otsu 적응형)하면 됨.
-- 🔄 **속도 비교(B) 진행 중**: 용량 버킷별 9장 SNAP vs sarsen(단독 실행). 결과는
-  [RTC_BENCHMARK_KR.md](RTC_BENCHMARK_KR.md) §3.
+- ✅ **속도 비교(B) 종결(2026-07-27)**: 9장(용량 버킷별) 완주 대신, sarsen이 풀사이즈
+  IW GRD에서 **지오코딩 interp OOM**(32GB, 피크 22GB+)에 걸린다는 것 자체가 결과 —
+  대표 씬 754B 쌍으로 확정: **sarsen 16.4분(30m) vs SNAP 27.9분(10m)**, 픽셀당은
+  **SNAP이 3.7배 빠름**. 상세는 [RTC_BENCHMARK_KR.md](RTC_BENCHMARK_KR.md) §3·§3.2.
 - ℹ️ **DEM 참고**: SNAP 자동 Copernicus DEM은 육상 씬에서 정상(기존 파이프라인
   문제 없음). 단 754B(해상 위주 씬)에서는 이번에 타일을 1개만 받아 커버리지가
   부족했고, 로컬 COP30(D:)로 넣으니 정상이었다(씬 국한, 상시 문제 아님)

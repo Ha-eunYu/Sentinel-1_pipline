@@ -44,8 +44,12 @@ def main() -> None:
         t0 = time.time()
 
         # GTC 배치(batch_grd_gtc.py)와 동시에 돌 때 같은 임시경로를 쓰면 같은
-        # 씬에서 충돌하므로 모드별 접두사로 분리한다.
-        ssd_copy = Path(tempfile.gettempdir()) / f"rtc_{zip_path.name}"
+        # 씬에서 충돌하므로 씬별 임시 하위폴더로 격리한다(파일명 접두사는
+        # SNAP의 Sentinel-1 리더가 파일명 패턴으로 포맷을 인식하는 걸 깨뜨려
+        # "No product reader found" 오류를 내므로 쓰지 않는다 — 원본 파일명은
+        # 그대로 유지해야 함, batch_grd_rtc_frost.py와 동일 패턴).
+        tmpdir = Path(tempfile.mkdtemp(prefix="rtc_"))
+        ssd_copy = tmpdir / zip_path.name
         try:
             shutil.copy2(zip_path, ssd_copy)
             graph = build_grd_rtc_graph(ssd_copy, out_dir=OUT_DIR)
@@ -58,7 +62,7 @@ def main() -> None:
             out_tif.unlink(missing_ok=True)
             failed += 1
         finally:
-            ssd_copy.unlink(missing_ok=True)
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
     print(f"\n배치 완료: 성공 {done} / 건너뜀 {skipped} / 실패 {failed}")
 

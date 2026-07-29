@@ -4,8 +4,8 @@
 **홍수일(after) + 비교일(before) 수체 면적(km²)** 을 구한다. 지역별 before/after 비교로
 상시수 대비 홍수 확대분을 본다.
 
-관련: [FLOOD_NORTH_KOREA_KR.md](FLOOD_NORTH_KOREA_KR.md), [OTSU_SPLIT_BASED_KR.md](OTSU_SPLIT_BASED_KR.md),
-[WATER_AREA_KR.md](WATER_AREA_KR.md)
+관련: [FLOOD_NORTH_KOREA_KR.md](../FLOOD_NORTH_KOREA_KR.md), [OTSU_SPLIT_BASED_KR.md](../OTSU_SPLIT_BASED_KR.md),
+[WATER_AREA_KR.md](../WATER_AREA_KR.md)
 
 ---
 
@@ -50,7 +50,7 @@ QGIS로 그린 GeoPackage. 레이어 `flood_nk_20260725`, **10 MultiPolygon, EPS
 
 ### 2-1. 수체 탐지 임계값 (이번 산정에 사용)
 
-궤도별 split-based Otsu(이봉 타일 풀링, [OTSU_SPLIT_BASED_KR.md](OTSU_SPLIT_BASED_KR.md)):
+궤도별 split-based Otsu(이봉 타일 풀링, [OTSU_SPLIT_BASED_KR.md](../OTSU_SPLIT_BASED_KR.md)):
 
 | 날짜 | 궤도 | 필터 | Otsu 임계값 |
 | --- | --- | --- | --- |
@@ -90,7 +90,7 @@ conda run -n s1_snappy python build_water_per_date_otsu.py \
 
 # [3] 지역별 before/after 수체 면적 표
 conda run -n gis_clean python nk_flood_water_area.py
-#   → downloads/water_otsu/nk_water_before_after_20260725.csv
+#   → nk_water_before_after_20260725.csv
 ```
 
 `nk_flood_water_area.py`의 **OVERRIDES** 딕셔너리로 특정 지역·관측을 `scene_water` 지도로
@@ -113,7 +113,7 @@ conda run -n gis_clean python nk_flood_water_area.py
 | 9 | 곽산군 | 07-25 | 4303,59A8 | 5.62 | 07-13 | AEB7,93FC | 3.62 | 07-19 | 0B91 | 4.60 |
 | 10 | 황강댐 | 07-25 | 59A8 | 21.28 | 07-13 | 93FC | 17.92 | 07-20 | DD29 | 25.93 |
 
-CSV: `downloads/water_otsu/nk_water_before_after_20260725.csv`
+CSV: `nk_water_before_after_20260725.csv`
 
 **해석(예)**: 신평군 9.36→19.50(+10.1), 연탄군 3.68→8.30(+4.6), 안악군 7.39→11.83(+4.4)
 = 7/13 대비 7/25 수체 확대(홍수 신호). 황강댐은 7/13 17.92 → 7/20 25.93(피크) → 7/25
@@ -141,5 +141,5 @@ CSV: `downloads/water_otsu/nk_water_before_after_20260725.csv`
 
 - `flood_nk_20260725.gpkg` — 입력 지역 폴리곤(10개).
 - `downloads/water_otsu/flood_water_total_2026072[0359...]_o*[_frost].tif` — 날짜·궤도별 수체 지도.
-- `downloads/water_otsu/nk_water_before_after_20260725.csv` — 지역별 before/after 수체 면적표.
+- `nk_water_before_after_20260725.csv` — 지역별 before/after 수체 면적표.
 - `nk_flood_water_area.py`, `build_water_per_date_otsu.py` — 재현 코드.

@@ -58,7 +58,7 @@ PROJECT_DIR = Path(__file__).resolve().parent
 GRD_DIR = PROJECT_DIR / "downloads" / "sentinel1_grd"
 SNAP_OUT = PROJECT_DIR / "downloads" / "rtc_grd_bench_snap"
 SARSEN_OUT = PROJECT_DIR / "downloads" / "rtc_grd_bench_sarsen"
-CSV_OUT = PROJECT_DIR / "downloads" / "rtc_benchmark.csv"
+CSV_OUT = PROJECT_DIR / "rtc_sarsen_benchmark" / "rtc_benchmark.csv"  # 정리 폴더(2026-07-29)
 DEFAULT_COP30_VRT = Path(r"D:/00_COP30/COP30_hh.vrt")
 
 PROC_RE = re.compile(r"PROCESS_SECONDS=([\d.]+)")

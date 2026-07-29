@@ -4,7 +4,7 @@
 **목적**: 현재 워크스테이션 자원에서 Sentinel-1 RTC 전처리 **속도의 한계**를 실측으로
 정리하고, **RAM·CPU·GPU 증설별 시간 단축 효과**를 정량적으로 비교한다.
 [RAM_증설_요청_근거.md](RAM_증설_요청_근거.md)(2026-07-14, RAM 병목)와
-[RTC_BENCHMARK_KR.md](RTC_BENCHMARK_KR.md)(SNAP vs sarsen 속도 실측)의 후속·종합 문서.
+[RTC_BENCHMARK_KR.md](../rtc_sarsen_benchmark/RTC_BENCHMARK_KR.md)(SNAP vs sarsen 속도 실측)의 후속·종합 문서.
 
 ---
 
@@ -62,7 +62,7 @@
   반복 재읽기 → 씬당 속도 손해.
 - **sarsen 풀씬 OOM**: SNAP-free(sarsen) 경로는 full float64 그리드를 적재해 풀씬
   지오코딩에서 피크 ~22GB+ → 32GB(여유 ~22GB)에서 `MemoryError`. 짧은 씬만 되고,
-  `--tc-chunks 256`으로 겨우 회피하나 느리다([RTC_BENCHMARK_KR.md](RTC_BENCHMARK_KR.md) §3.2).
+  `--tc-chunks 256`으로 겨우 회피하나 느리다([RTC_BENCHMARK_KR.md](../rtc_sarsen_benchmark/RTC_BENCHMARK_KR.md) §3.2).
 
 ### 3.3 GPU — 현 파이프라인 미사용
 
@@ -179,7 +179,7 @@ SNAP은 코어에 **완전 선형이 아니다**(병렬화 안 되는 연산·�
 ## 6. 부록 — 측정 근거
 
 - SNAP GRD RTC 10m 754B: `PROCESS_SECONDS` 1674s(27.9분), 출력 32183×13678(440M px),
-  0.26 Mpx/s ([RTC_BENCHMARK_KR.md](RTC_BENCHMARK_KR.md) §3).
+  0.26 Mpx/s ([RTC_BENCHMARK_KR.md](../rtc_sarsen_benchmark/RTC_BENCHMARK_KR.md) §3).
 - sarsen 754B: 984s(16.4분), 70M px(30m), 0.07 Mpx/s. 풀씬은 지오코딩 interp에서
   ~22GB+ 피크로 `numpy MemoryError`(§3.2).
 - 씬 1개 SNAP Working Set 14–18GB, 처리 중 여유 RAM 3–5GB (RAM_증설_요청_근거.md §2).
