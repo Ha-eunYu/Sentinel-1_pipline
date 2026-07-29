@@ -1,4 +1,7 @@
-# GTC·RTC 처리 이력 (2026-07-22 기준)
+# GTC·RTC 처리 이력 (2026-07-30 갱신)
+
+> 2~5절은 **2026-07-22 시점** 기록이다. 그 이후(Frost 전면 재처리, 7월 후반
+> 씬, 남한 궤도 선별)는 **6절**에 이어 적는다.
 
 이 프로젝트에서 어떤 지역·날짜의 어떤 Sentinel-1 GRD 촬영본을 RTC/GTC로
 처리했는지, 그리고 각 처리의 과정(그래프 단계·파라미터)을 정리한 문서.
@@ -102,8 +105,14 @@ Read → Apply-Orbit-File → ThermalNoiseRemoval → Calibration(Sigma0)
 | 07/18 | S1C | 21:46 (저녁 하강) | 2B06·6EBE·C9CC | ✅ | 2B06·6EBE ✅ / C9CC ⏳ |
 | 07/19 | S1D | 09:39 (아침 상승) | 0B91·3194 | ✅ | ⏳ |
 | 07/20 | S1C | 21:30 (저녁 하강, 최신 패스) | CE47·0CEF·392D·DD29·F314·74BD·93DD | ✅ | ✅ |
+| 07/25 | S1C | 21:38 (저녁 하강) | 3804·4303·59A8·BE24·D74B | Frost만 | — |
+| 07/26 | S1D | 09:30 (아침 상승) | 772C | Frost만 | — |
+| 07/27 | S1C | 21:21 (저녁 하강) | DF80·32ED·08EE·9B8B | Frost만 | — |
+| 07/28 | S1D | 09:16 (아침 상승) | 639F | Frost만 | — |
 
 ✅=완료, ⏳=GTC 배치 진행 중(2026-07-22 기준 GTC 31/한반도씬 완료, 나머지 순차 처리).
+"Frost만"=Refined Lee 산출물 없이 `rtc_grd_frost/`에만 존재(6절). GTC는 육안
+비교용이라 7/20 이후로는 돌리지 않았다.
 
 ### 2.2 일본/중국 전용 씬 (`downloads/excluded_china_japan/`, 한반도 footprint 0%)
 
@@ -162,3 +171,72 @@ GTC는 **육안 비교 전용**(수체 탐지 미사용, [RTC_VS_GTC_KR.md](RTC_
 > powershell -ExecutionPolicy Bypass -File archive_gtc.ps1 -WhatIf   # 대상 미리보기
 > powershell -ExecutionPolicy Bypass -File archive_gtc.ps1           # 실제 이동
 > ```
+
+---
+
+## 6. Frost 재처리 완료와 남한 궤도 선별 (2026-07-30)
+
+### 6.1 26년 7월 RTC(Frost) 전량 완료
+
+2026-07-23에 기본 speckle 필터를 Refined Lee → Frost로 바꾼 뒤(1절 주의),
+7/27~7/30 배치로 **26년 7월 GRD 57씬을 전부 `downloads/rtc_grd_frost/`에
+재처리**했다. 마지막까지 남아 있던 7/27 4씬 중 **남한 footprint가 걸리는
+2씬(08EE·9B8B)만** 처리하고, 남한 0%인 2씬(DF80·32ED)은 돌리지 않았다
+(수체 판독 대상이 26년 7월 **남한**이므로).
+
+씬을 골라 돌리기 위해 [batch_grd_rtc_frost.py](batch_grd_rtc_frost.py)에
+`--only` 옵션을 추가했다(파일명 부분일치, 미지정 시 종전대로 전체):
+
+```bash
+conda run -n s1_snappy python batch_grd_rtc_frost.py --month 202607 --only 08EE,9B8B
+```
+
+### 6.2 궤도그룹별 남한 커버율 (footprint 실측)
+
+bbox가 아니라 **원본 zip의 `preview/map-overlay.kml` footprint**를
+`geojson/South_Korea.geojson`과 point-in-polygon 대조해 산정했다(bbox를 쓰면
+기운 평행사변형의 빈 삼각형까지 "촬영"으로 오판한다 —
+[SCENE_FOOTPRINT_REAUDIT_KR.md](SCENE_FOOTPRINT_REAUDIT_KR.md),
+[footprint/FOOTPRINT_AOI_KR.md](footprint/FOOTPRINT_AOI_KR.md)).
+
+26년 7월 20개 궤도그룹 중 **남한 궤도 11개**:
+
+| 날짜 | 궤도 | 프레임 | 남한 최대 | 프레임별 남한 비율 |
+| --- | --- | ---: | ---: | --- |
+| 07/01 | o008355 | 5 | 17.9% | EC8B 18 · 0FEB 7 · 8E98 6 · 54D9 0 · 5C8D 0 |
+| 07/02 | o003493 | 2 | 54.7% | 5469 55 · EF53 31 |
+| 07/03 | o008384 | 4 | 11.2% | 6942 11 · 9A73 10 · 32AE 0 · 64DE 0 |
+| 07/13 | o008530 | 5 | 17.9% | 3C22 18 · 93FC 7 · 1A5A 6 · 4265 0 · AEB7 0 |
+| 07/14 | o003668 | 2 | 54.7% | FE43 55 · 376D 31 |
+| 07/14 | o003675 | 2 | 71.5% | 8EF1 72 · B126 70 |
+| 07/15 | o008552 | 3 | 59.0% | AC28 59 · C278 45 · 2DA8 2 |
+| 07/20 | o008632 | 8 | 80.2% | F314 80 · DD29 71 · 74BD 23 · 392D 2 · 나머지 4개 0 |
+| 07/25 | o008705 | 5 | 17.9% | BE24 18 · 59A8 7 · D74B 6 · 3804 0 · 4303 0 |
+| 07/26 | o003843 | 1 | 39.6% | 772C 40 |
+| 07/27 | o008734 | 2 | 38.2% | 9B8B 38 · 08EE 10 |
+
+남한 0%로 제외한 9개 궤도: 07/03 o008377, 07/04 o003522, 07/06 o008428,
+07/07 o003566, 07/16 o003697, 07/16 o003704, 07/18 o008603, 07/19 o003741,
+07/28 o003872.
+
+> **궤도그룹은 통째로 쓴다.** 남한 0%인 프레임이 섞여 있어도 그 프레임만
+> 빼지 않는다. 타일 기반 Otsu는 궤도 전체 히스토그램에서 이봉 타일을 골라야
+> 임계값이 안정적이라, 프레임을 미리 잘라내면 표본이 줄어 임계값이 흔들린다.
+> 남/북 분리는 판정 **후** [split_flood_area_nk_sk.py](split_flood_area_nk_sk.py)
+> 단계에서 한다.
+
+### 6.3 25년·26년 혼재 방지
+
+25년 7월 RTC가 **같은 폴더(`downloads/rtc_grd_frost/`)** 에 순차로 올라오고
+있고(2026-07-30 기준 20250707 1씬 도착), 25년 Otsu는 추후 별도로 돌린다.
+연도가 섞이지 않도록:
+
+- [build_water_per_date_otsu.py](build_water_per_date_otsu.py)의 `--dates`를
+  **접두사 일치**로 바꿨다: `--dates 2026`(그 해) / `202607`(그 달) /
+  `20260703`(하루). 궤도 목록을 잊어도 연도가 고정된다.
+- `--orbits`(절대궤도 화이트리스트)를 추가했다. 셸이 `008632`를 숫자로 읽어
+  앞의 0을 떨구는 사고가 있어 스크립트에서 `zfill(6)`으로 정규화한다.
+- 산출물 파일명에 관측일이 들어가므로(`flood_water_total_<날짜>_o<궤도>_frost.tif`)
+  25·26년이 같은 출력 폴더에 있어도 덮어쓰지 않는다.
+
+결과는 [WATER_AREA_KR.md](WATER_AREA_KR.md) "26년 7월 남한 궤도" 절 참고.

@@ -45,12 +45,22 @@ def main() -> None:
     ap.add_argument("--out-dir", default="downloads/rtc_grd_frost")
     ap.add_argument("--month", default="202607", help="이 접두사로 시작하는 촬영일만 (예: 202607)")
     ap.add_argument("--oldest-first", action="store_true", help="기본은 최신순; 이 옵션이면 오래된 순")
+    ap.add_argument(
+        "--only",
+        default="",
+        help="쉼표로 구분한 씬 ID(4자리) 목록만 처리 (예: 08EE,9B8B). "
+        "남한 footprint 씬만 골라 돌릴 때 사용.",
+    )
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     zips = [z for z in GRD_DIR.glob("*.zip") if scene_date(z).startswith(args.month)]
+    if args.only:
+        wanted = {s.strip().upper() for s in args.only.split(",") if s.strip()}
+        # 파일명 형식(…_<씬ID>.zip / …_<씬ID>_COG.zip)이 섞여 있어 부분일치로 판정.
+        zips = [z for z in zips if any(f"_{s}" in z.name.upper() for s in wanted)]
     if not zips:
         raise FileNotFoundError(f"{GRD_DIR} 에 {args.month} 촬영 GRD zip이 없습니다.")
     # 최신 날짜 먼저 (동일 날짜는 파일명 역순)

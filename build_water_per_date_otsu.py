@@ -106,13 +106,17 @@ def group_scenes(dates: list[str] | None, source_dir: Path, suffix: str
                  ) -> dict[tuple[str, str], list[Path]]:
     """(날짜, 절대궤도) -> 프레임 목록. dates=None 이면 존재하는 모든 날짜.
     source_dir/suffix로 RTC(rtc_grd/*_rtc_db.tif) 외에 GTC·Frost 재처리본 등
-    다른 소스도 그대로 스캔할 수 있다(파일명의 날짜·궤도 패턴은 동일)."""
+    다른 소스도 그대로 스캔할 수 있다(파일명의 날짜·궤도 패턴은 동일).
+
+    dates 항목은 **접두사 일치**다: "20260703"은 그 하루, "202607"은 그 달,
+    "2026"은 그 해만 고른다. 한 폴더에 여러 해(2025·2026)의 RTC가 섞여 있을 때
+    특정 연도만 돌리는 안전장치."""
     groups: dict[tuple[str, str], list[Path]] = defaultdict(list)
     for tif in sorted(source_dir.glob(f"*_{suffix}.tif")):
         d, orbit = scene_date(tif), scene_orbit(tif)
         if d is None or orbit is None:
             continue
-        if dates is not None and d not in dates:
+        if dates is not None and not any(d.startswith(p) for p in dates):
             continue
         groups[(d, orbit)].append(tif)
     return groups
@@ -278,7 +282,9 @@ def water_for_group(date: str, orbit: str, frames: list[Path], out_name: str,
 def main() -> None:
     parser = argparse.ArgumentParser(description="궤도별·날짜별 타일기반 Otsu 수체 지도")
     parser.add_argument("--dates", default=None,
-                        help="쉼표구분 YYYYMMDD 목록 (생략 시 존재하는 모든 날짜)")
+                        help="쉼표구분 날짜 목록, 접두사 일치 (생략 시 존재하는 모든 날짜). "
+                             "예: 20260703(하루) / 202607(그 달) / 2026(그 해). "
+                             "한 폴더에 여러 해 RTC가 섞일 때 연도 고정용")
     parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR,
                         help="입력 dB GeoTIFF가 있는 폴더 (기본 downloads/rtc_grd)")
     parser.add_argument("--suffix", default=DEFAULT_SUFFIX,
@@ -296,12 +302,20 @@ def main() -> None:
     parser.add_argument("--fallback-db", type=float, default=FALLBACK_DB_DEFAULT,
                         help="이봉 타일 부족 시 고정 임계값")
     parser.add_argument("--overwrite", action="store_true", help="기존 출력도 재계산")
+    parser.add_argument("--orbits", default=None,
+                        help="쉼표구분 절대궤도번호(6자리) 목록만 처리 (예: 008632,003675). "
+                             "남한 footprint 궤도만 돌릴 때 사용")
     args = parser.parse_args()
 
     dates = [d.strip() for d in args.dates.split(",")] if args.dates else None
+    # 6자리 0채움 정규화 — 셸이 "008632"를 숫자로 해석해 앞의 0을 떨구는 경우가 있다.
+    orbits = ({o.strip().zfill(6) for o in args.orbits.split(",") if o.strip()}
+              if args.orbits else None)
     out_dir: Path = args.out_dir
     vrt_dir = out_dir / "vrt"
     groups = group_scenes(dates, args.source_dir, args.suffix)
+    if orbits:
+        groups = {k: v for k, v in groups.items() if k[1] in orbits}
     if not groups:
         raise SystemExit(f"처리할 그룹이 없습니다 ({args.source_dir}에 해당 날짜의 "
                          f"*_{args.suffix}.tif 없음).")
