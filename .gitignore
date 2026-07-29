@@ -29,7 +29,16 @@ Thumbs.db
 *.log
 
 # Local outputs
-downloads/
+# downloads/ 는 통째로 무시하되 수체탐지 로그 CSV(수 KB)만 예외로 추적한다.
+# 래스터는 재처리로 복구 가능하지만 임계값·면적 이력을 잃으면 재현 근거가
+# 사라진다. git은 부모 디렉터리가 제외되면 하위 파일을 되살릴 수 없어,
+# "downloads/*" -> water_otsu 디렉터리만 되살림 -> 그 안도 파일 2개만 되살림
+# 순서로 단계적으로 적는다.
+downloads/*
+!downloads/water_otsu/
+downloads/water_otsu/*
+!downloads/water_otsu/otsu_thresholds.csv
+!downloads/water_otsu/water_area_perrow.csv
 outputs/
 tmp/
 temp/
