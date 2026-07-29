@@ -61,3 +61,9 @@ sardem-sarsen-main/
 
 # raw support emails (personal info: address, Dell case)
 *.eml
+
+# RTC/footprint 감사 산출물(스크립트로 재생성 가능)
+footprint/*.csv
+
+# 벡터 데이터 스냅샷(재생성 가능한 산출물)
+*.gpkg
