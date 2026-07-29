@@ -107,7 +107,7 @@ RAM은 **씬당 시간을 거의 줄이지 못한다**(CPU-bound). 대신 세 �
 
 #### 4.1.1 Dell 확인 메모리 스펙 (구매 시 — Case (생략) / Service Tag (생략))
 
-Dell 기술지원(2024-07-15, Kangsan Kim 회신, 연락처 080-854-0066)으로 이 워크스테이션
+Dell 기술지원(2026-07-15, Kangsan Kim 회신, 연락처 080-854-0066)으로 이 워크스테이션
 (Service Tag **(생략)**)의 호환 메모리를 확정했다:
 
 - **Xeon W CPU 장착 → ECC Registered DIMM(RDIMM) 필수.** 일반 UDIMM은 장착 불가.
