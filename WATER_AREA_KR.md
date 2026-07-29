@@ -61,6 +61,8 @@ Otsu를 돌렸다. 궤도 선별 근거와 프레임별 남한 비율은
 
 산출물은 `_frost` 접미사로 위 표(Refined Lee)와 분리 저장했다:
 `downloads/water_otsu/flood_water_total_<날짜>_o<궤도>_frost.tif`.
+이 수치를 25년 7월과 견줘 가뭄을 보는 설계·현황은
+[DROUGHT_KR.md](DROUGHT_KR.md)에 정리했다.
 
 | 날짜 | 궤도 | 프레임 | 남한 최대 | Otsu 임계값 | 분리도 η | **pixel_perrow (km²)** | 참고: Refined Lee |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
