@@ -7,6 +7,7 @@
 이 문서는 "무엇으로 판정할 것인가"와 "지금 무엇까지 있는가"를 고정해,
 나중에 숫자가 채워질 때 기준이 흔들리지 않게 하는 것이 목적이다.
 
+- **전처리·수체판별 전 과정**: [PROCESS_202507_202607_KR.md](PROCESS_202507_202607_KR.md)
 - 관측 자료·임계값·면적: [WATER_AREA_KR.md](WATER_AREA_KR.md)
 - 처리 이력·궤도 선별: [GTC_RTC_PROCESSING_LOG_KR.md](GTC_RTC_PROCESSING_LOG_KR.md) 6절
 - 임계값 방법론: [OTSU_SPLIT_BASED_KR.md](OTSU_SPLIT_BASED_KR.md)
