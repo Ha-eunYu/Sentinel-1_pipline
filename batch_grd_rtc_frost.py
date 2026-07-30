@@ -51,6 +51,12 @@ def main() -> None:
         help="쉼표로 구분한 씬 ID(4자리) 목록만 처리 (예: 08EE,9B8B). "
         "남한 footprint 씬만 골라 돌릴 때 사용.",
     )
+    # gpt 자원 옵션: 실측상 gpt는 -q 8 을 줘도 1코어 남짓만 쓰고(단일 스레드 구간이
+    # 병목) 디스크도 유휴라, 배치 2개를 병렬로 띄우는 편이 총 처리시간을 줄인다.
+    # 그때 타일 캐시(-c)를 나눠 잡아야 RAM(32GB)을 넘기지 않는다.
+    ap.add_argument("--gpt-q", default="8", help="gpt 병렬도 (-q). 기본 8")
+    ap.add_argument("--gpt-c", default="14G", help="gpt 타일 캐시 (-c). 기본 14G. "
+                    "배치를 병렬로 돌릴 땐 6~7G씩으로 나눌 것.")
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -88,7 +94,7 @@ def main() -> None:
         try:
             shutil.copy2(zip_path, ssd_copy)
             graph = build_grd_rtc_graph(ssd_copy, out_dir=out_dir)  # speckle 기본=Frost
-            graph.run(gpt_options=["-q", "8", "-c", "14G"])
+            graph.run(gpt_options=["-q", args.gpt_q, "-c", args.gpt_c])
             print(f"[{i}/{len(zips)}] 완료 ({(time.time() - t0) / 60:.1f}분): {out_tif.name}")
             done += 1
         except Exception as e:
