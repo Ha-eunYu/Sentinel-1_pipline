@@ -195,6 +195,14 @@ def build_grd_rtc_graph(
             imgResamplingMethod="BILINEAR_INTERPOLATION",
             demResamplingMethod="BILINEAR_INTERPOLATION",
             saveSelectedSourceBand="true",
+            # 레이오버·섀도 마스크를 dB와 **같은 격자**로 함께 낸다.
+            #
+            # Terrain-Flattening은 밝기를 지형으로 정규화할 뿐, 그 화소가 못 쓰는
+            # 화소라고 표시하지 않는다. 그래서 섀도가 값으로 남는데, 실측상
+            # **정상역보다 5~7 dB 어둡고 물 오탐 위험이 10배**다(14.6~23.8% vs
+            # 1.4~2.6%). OPERA는 섀도의 90% 이상을 nodata로 뺀다.
+            # 상세: gee/ASF_HyP3/RTC_VS_OPERA_QUANT_KR.md §3-a
+            saveLayoverShadowMask="true",
             **dem_params,
         ),
         node_id="Terrain-Correction",

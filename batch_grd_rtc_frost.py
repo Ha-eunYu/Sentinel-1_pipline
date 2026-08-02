@@ -57,6 +57,16 @@ def main() -> None:
     ap.add_argument("--gpt-q", default="8", help="gpt 병렬도 (-q). 기본 8")
     ap.add_argument("--gpt-c", default="14G", help="gpt 타일 캐시 (-c). 기본 14G. "
                     "배치를 병렬로 돌릴 땐 6~7G씩으로 나눌 것.")
+    # 편파 (2026-07-31 추가)
+    # 기존 rtc_grd_frost/ 65개는 전부 VV다. 그런데 GEE 수체탐지는 VH를 쓴다
+    # (VH가 물/육지 대비가 안정적이고 풍파에 덜 민감). 두 산출물을 비교하면
+    # RTC 차이가 아니라 **편파 차이**를 재게 된다 — 실측 오프셋 약 6 dB
+    # (gee/Korea_WaterDetection_2025_2026/EDGE_OTSU_INITIAL_THRESHOLD_KR.md §2).
+    # VH로 재처리해야 정식 RTC ↔ 근사 RTC 비교가 성립한다.
+    ap.add_argument("--pol", default="VV", choices=["VV", "VH"],
+                    help="편파. VH로 돌릴 땐 --out-dir도 따로 줄 것")
+    ap.add_argument("--out-tag", default="",
+                    help="산출물 파일명 접미사(예: _vh). 같은 폴더에 섞일 때 구분용")
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -73,13 +83,14 @@ def main() -> None:
     zips.sort(key=lambda z: (scene_date(z), z.name), reverse=not args.oldest_first)
 
     order = "오래된순" if args.oldest_first else "최신순"
-    print(f"대상 GRD({args.month}, {order}): {len(zips)}개 -> {out_dir} (Frost)")
+    print(f"대상 GRD({args.month}, {order}): {len(zips)}개 -> {out_dir} "
+          f"(Frost, {args.pol})")
     for z in zips:
         print(f"  {scene_date(z)}  {z.name}")
 
     done = skipped = failed = 0
     for i, zip_path in enumerate(zips, start=1):
-        out_tif = out_dir / f"{zip_path.stem}_rtc_db.tif"
+        out_tif = out_dir / f"{zip_path.stem}_rtc_db{args.out_tag}.tif"
         if out_tif.exists():
             print(f"[{i}/{len(zips)}] 건너뜀 (이미 처리됨): {out_tif.name}")
             skipped += 1
@@ -93,7 +104,9 @@ def main() -> None:
         ssd_copy = tmpdir / zip_path.name
         try:
             shutil.copy2(zip_path, ssd_copy)
-            graph = build_grd_rtc_graph(ssd_copy, out_dir=out_dir)  # speckle 기본=Frost
+            graph = build_grd_rtc_graph(ssd_copy, out_dir=out_dir,
+                                        polarization=args.pol,
+                                        out_tag=args.out_tag)  # speckle 기본=Frost
             graph.run(gpt_options=["-q", args.gpt_q, "-c", args.gpt_c])
             print(f"[{i}/{len(zips)}] 완료 ({(time.time() - t0) / 60:.1f}분): {out_tif.name}")
             done += 1
