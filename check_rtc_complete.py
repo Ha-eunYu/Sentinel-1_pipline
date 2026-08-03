@@ -21,11 +21,14 @@ SNAP `gpt`가 메모리 부족으로 죽으면 산출 GeoTIFF가 중간에서 �
 
 ⚠ 가로선으로 끊긴다고 다 절단은 아니다
     `aoi_wkt`로 clip한 산출물은 **창의 남/북 경계가 위경도 가로선**이라 거기서
-    뚝 끊긴다. 정상이다. 그래서 `--clip-south`로 창의 남쪽 위도를 주면 그
-    위도에서 끝난 것을 **정상**으로 판정한다. 안 주면 위도만 알려 준다.
+    뚝 끊긴다. 정상이다. 창을 알아야 정상인지 절단인지 갈린다.
 
-        38C3  자료 끝 34.03N,  clip 창 남쪽 34.07N  →  정상
-        93DD  자료 끝 34.98N,  창 남쪽 34.07N       →  창 한참 위에서 끊김 = 절단
+        38C3  자료 끝 34.08N,  clip 창 남쪽 34.07N  →  정상
+
+    창은 `rtc_basin_extdem.py`가 산출 폴더의 **`_clip_windows.json`** 에
+    파일별로 남긴다. 그 기록을 먼저 쓰고, 없는 파일만 `--clip-south` 값을
+    쓴다. **창이 다른 산출물이 한 폴더에 섞이면 `--clip-south` 하나로는
+    감당이 안 되므로** 기록 쪽이 정답이다.
 
 ⚠ 쓰는 중인 파일
     미완성 타일을 읽으면 `TIFFReadEncodedTile() failed`가 난다. 최근 수정된
@@ -42,6 +45,7 @@ SNAP `gpt`가 메모리 부족으로 죽으면 산출 GeoTIFF가 중간에서 �
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import time
 from pathlib import Path
@@ -124,7 +128,17 @@ def main() -> None:
         raise SystemExit(f"tif 없음: {args.dir.resolve()}")
     want = {t.upper() for t in args.tags}
 
-    print(f"{args.dir.resolve()}\n")
+    # 파일별 clip 창 기록 — rtc_basin_extdem.py 가 남긴다
+    rec_p = args.dir / "_clip_windows.json"
+    rec = {}
+    if rec_p.exists():
+        try:
+            rec = json.loads(rec_p.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            print(f"⚠ {rec_p.name} 를 읽을 수 없다 — --clip-south 로만 판정한다")
+
+    print(f"{args.dir.resolve()}")
+    print(f"창 기록 {len(rec)}건" + ("" if rec else " — 없음") + "\n")
     bad = 0
     for p in tifs:
         tag = scene_tag(p)
@@ -150,22 +164,27 @@ def main() -> None:
         #   ② clip 창의 남쪽 경계에서 끝났다 — 창 경계는 위경도 가로선이라
         #      스와스를 뚝 자른다. 이 경우 래스터 아래쪽은 비어 있는 게 정상이다.
         # 둘 다 아니면서 중간에서 끊겼으면 절단이다.
+        # 이 파일의 창 남쪽 위도 — 기록이 있으면 그걸, 없으면 --clip-south
+        r = rec.get(p.name)
+        c_south = r["bounds_4326"][1] if r else args.clip_south
+        src = "기록" if r else "--clip-south"
+
         at_bottom = frac >= 1 - 1 / args.bands
-        at_window = (args.clip_south is not None and south is not None
-                     and abs(south - args.clip_south) < args.lat_tol)
+        at_window = (c_south is not None and south is not None
+                     and abs(south - c_south) < args.lat_tol)
 
         if south is None:
             ok, note = False, "**자료 없음**"
         elif at_bottom:
             ok, note = True, f"완료 — 래스터 끝까지 ({south:.2f}N)"
         elif at_window:
-            ok, note = True, (f"완료 — clip 창 남쪽에서 끝 "
-                              f"({south:.2f}N ≈ {args.clip_south:.2f}N)")
+            ok, note = True, (f"완료 — 창 남쪽에서 끝 "
+                              f"({south:.2f}N ≈ {c_south:.2f}N, {src})")
         else:
             ok = False
-            w_txt = (f", 창은 {args.clip_south:.2f}N"
-                     if args.clip_south is not None else
-                     " — clip 창 남쪽과 같으면 정상이니 --clip-south 로 확인할 것")
+            w_txt = (f", 창은 {c_south:.2f}N({src})" if c_south is not None else
+                     " — 창 기록이 없다. rtc_basin_extdem.py 를 다시 돌리거나 "
+                     "--clip-south 로 줄 것")
             note = f"**{frac*100:.0f}% 에서 끊김 — 자료 끝 {south:.2f}N{w_txt}**"
         bad += 0 if ok else 1
         print(f"{tag:<6}{mb:>8.0f} MB  {w:>7,}x{h:<7,}  위|{bar}|아래  {note}")

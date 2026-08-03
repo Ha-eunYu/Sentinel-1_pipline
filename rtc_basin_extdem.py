@@ -110,6 +110,25 @@ def wkt_of(b) -> str:
             f"{b[2]} {b[3]},{b[0]} {b[3]},{b[0]} {b[1]}))")
 
 
+# 산출물마다 **어떤 창으로 잘렸는지** 남긴다. 이게 없으면 나중에 산출물이
+# 끝까지 쓰였는지 판정할 수 없다 — clip 창의 남/북 경계는 위경도 가로선이라
+# 거기서 자료가 뚝 끊기는데, 그게 정상인지 절단인지 창을 알아야 갈린다.
+# 창이 다른 산출물이 한 폴더에 섞이면 더더욱 필요하다.
+SIDECAR = "_clip_windows.json"
+
+
+def record_window(out_dir: Path, name: str, basin: str, date: str, clip) -> None:
+    p = out_dir / SIDECAR
+    try:
+        d = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    except json.JSONDecodeError:
+        d = {}
+    d[name] = {"basin": basin, "date": date,
+               "bounds_4326": [round(v, 6) for v in clip]}
+    p.write_text(json.dumps(d, ensure_ascii=False, indent=2, sort_keys=True),
+                 encoding="utf-8")
+
+
 def covers(outer, inner) -> bool:
     return (outer[0] <= inner[0] and outer[1] <= inner[1]
             and outer[2] >= inner[2] and outer[3] >= inner[3])
@@ -149,7 +168,13 @@ def main() -> None:
     ap.add_argument("--basin", action="append", choices=list(PAIRS))
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--gpt-c", default="6G")
-    ap.add_argument("--min-overlap", type=float, default=3.0)
+    # `--window`로 좁은 창을 줄 때는 **창을 다 덮는 granule 하나면 된다.**
+    # 부분만 겹치는 것은 보태 주는 게 없을뿐더러, geoRegion이 원본 밖으로 크게
+    # 벗어나면 `Subset`이 죽는다(2026-08-03 낙동강 창에서 4건 전부 실패).
+    # 그래서 창을 직접 줄 때는 기본 문턱을 99%로 올린다.
+    ap.add_argument("--min-overlap", type=float, default=None,
+                    help="창을 이 비율(%%) 이상 덮는 granule만 처리. "
+                         "기본은 유역 전체 3%%, --window 지정 시 99%%")
     ap.add_argument("--clip-margin", type=float, default=0.15,
                     help="SAR을 자를 창의 AOI 밖 여유(도). DEM 창과 다르다 — "
                          "모듈 주석의 '넘침' 설명 참고")
@@ -174,6 +199,8 @@ def main() -> None:
         if len(v) != 4:
             raise SystemExit("--window 는 'w,s,e,n' 네 값이어야 합니다")
         override = tuple(v)
+    if args.min_overlap is None:
+        args.min_overlap = 99.0 if override is not None else 3.0
 
     jobs = []
     for b in args.basin or list(PAIRS):
@@ -218,7 +245,7 @@ def main() -> None:
                 ov = overlap(fp, clip)
                 if ov < args.min_overlap:
                     continue
-                jobs.append((b, date, ov, z, dem, wkt_of(clip)))
+                jobs.append((b, date, ov, z, dem, clip))
 
     if args.only:
         want = {s.strip().upper() for s in args.only.split(",") if s.strip()}
@@ -234,13 +261,14 @@ def main() -> None:
         raise SystemExit("\n--dry-run: 처리하지 않았습니다.")
 
     print()
-    for i, (b, date, ov, z, dem, wkt) in enumerate(jobs, 1):
+    for i, (b, date, ov, z, dem, clip) in enumerate(jobs, 1):
         # 창을 직접 준 산출은 유역 전체판과 파일명이 겹치면 안 된다
         tag = f"_ext_{b}" if override is None else \
             f"_ext_{b}_w{override[0]:.2f}_{override[1]:.2f}".replace(".", "p")
         out_tif = OUT / f"{z.stem}_rtc_db{tag}.tif"
         if out_tif.exists() and out_tif.stat().st_size > 1e6:
             print(f"[{i}/{len(jobs)}] 이미 있음 — {out_tif.name[-30:]}", flush=True)
+            record_window(OUT, out_tif.name, b, date, clip)   # 기록은 늘 남긴다
             continue
         t0 = time.time()
         tmp = Path(tempfile.mkdtemp(prefix="ext_"))
@@ -252,9 +280,10 @@ def main() -> None:
                 external_dem_file=dem.resolve(),
                 external_dem_nodata=-32768.0,
                 external_dem_apply_egm=False,   # COP30은 타원체고다
-                aoi_wkt=wkt,                    # ← SAR을 DEM 창으로 자른다
+                aoi_wkt=wkt_of(clip),           # ← SAR을 이 창으로 자른다
                 out_tag=tag)
             g.run(gpt_options=["-q", "8", "-c", args.gpt_c])
+            record_window(OUT, out_tif.name, b, date, clip)
             print(f"[{i}/{len(jobs)}] {time.time()-t0:>5.0f}s  {b} {date}  "
                   f"{out_tif.name[-30:]}", flush=True)
         except Exception as e:                          # noqa: BLE001
