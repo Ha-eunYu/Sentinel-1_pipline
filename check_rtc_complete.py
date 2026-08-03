@@ -19,6 +19,14 @@ SNAP `gpt`가 메모리 부족으로 죽으면 산출 GeoTIFF가 중간에서 �
 93DD는 아래로 갈수록 **늘다가** 최대치에서 멈췄다. 정상이라면 거기서부터
 줄어들어야 한다.
 
+⚠ 가로선으로 끊긴다고 다 절단은 아니다
+    `aoi_wkt`로 clip한 산출물은 **창의 남/북 경계가 위경도 가로선**이라 거기서
+    뚝 끊긴다. 정상이다. 그래서 `--clip-south`로 창의 남쪽 위도를 주면 그
+    위도에서 끝난 것을 **정상**으로 판정한다. 안 주면 위도만 알려 준다.
+
+        38C3  자료 끝 34.03N,  clip 창 남쪽 34.07N  →  정상
+        93DD  자료 끝 34.98N,  창 남쪽 34.07N       →  창 한참 위에서 끊김 = 절단
+
 ⚠ 쓰는 중인 파일
     미완성 타일을 읽으면 `TIFFReadEncodedTile() failed`가 난다. 최근 수정된
     파일은 `--fresh-sec`(기본 120초)로 걸러 "처리중"으로만 표시한다.
@@ -67,6 +75,35 @@ def profile(src, bands: int, rows: int) -> list[float]:
     return out
 
 
+def last_data_lat(src, rows: int, steps: int = 200):
+    """자료가 있는 가장 남쪽·북쪽 위도. 아래에서 위로 훑어 첫 값을 찾는다."""
+    from rasterio.warp import transform_bounds
+
+    step = max(1, src.height // steps)
+
+    def scan(order):
+        for i in order:
+            off = min(i * step, src.height - rows)
+            try:
+                a = src.read(1, window=Window(0, off, src.width, rows))
+            except Exception:                               # noqa: BLE001
+                continue
+            if (np.isfinite(a) & (a != 0)).any():
+                return off
+        return None
+
+    lo = scan(range(steps - 1, -1, -1))       # 아래에서 위로 → 남쪽 끝
+    hi = scan(range(steps))                   # 위에서 아래로 → 북쪽 끝
+    if lo is None:
+        return None, None
+
+    def lat(row):
+        b = src.window_bounds(Window(0, row, src.width, rows))
+        return transform_bounds(src.crs, "EPSG:4326", *b)[1]
+
+    return lat(lo), lat(hi)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -76,6 +113,10 @@ def main() -> None:
     ap.add_argument("--rows", type=int, default=8, help="띠마다 읽을 행 수")
     ap.add_argument("--fresh-sec", type=float, default=120.0,
                     help="이 시간 안에 수정된 파일은 '처리중'으로 건너뛴다")
+    ap.add_argument("--clip-south", type=float, default=None,
+                    help="clip 창의 남쪽 위도. 주면 거기서 끝난 것을 정상으로 본다")
+    ap.add_argument("--lat-tol", type=float, default=0.15,
+                    help="--clip-south 와의 허용 오차(도)")
     args = ap.parse_args()
 
     tifs = sorted(args.dir.glob("*.tif"))
@@ -98,12 +139,34 @@ def main() -> None:
         with rasterio.open(p) as s:
             prof = profile(s, args.bands, args.rows)
             w, h = s.width, s.height
+            south, north = last_data_lat(s, args.rows)
 
         bar = "".join(BLOCKS[min(8, int((100 - v) / 12.5))] for v in prof)
-        # 유효가 있는 마지막 띠. 끝에서 두 띠 안이면 스와스가 자연스레 끝난 것.
         last = max((i for i, v in enumerate(prof) if v > 0.05), default=-1)
-        ok = last >= args.bands - 2
-        note = "완료" if ok else f"**{(last + 1) / args.bands * 100:.0f}% 에서 절단**"
+        frac = (last + 1) / args.bands
+
+        # 끝난 이유는 둘 중 하나면 된다.
+        #   ① 래스터 자체의 마지막 행까지 자료가 닿았다 (스와스가 자연히 끝남)
+        #   ② clip 창의 남쪽 경계에서 끝났다 — 창 경계는 위경도 가로선이라
+        #      스와스를 뚝 자른다. 이 경우 래스터 아래쪽은 비어 있는 게 정상이다.
+        # 둘 다 아니면서 중간에서 끊겼으면 절단이다.
+        at_bottom = frac >= 1 - 1 / args.bands
+        at_window = (args.clip_south is not None and south is not None
+                     and abs(south - args.clip_south) < args.lat_tol)
+
+        if south is None:
+            ok, note = False, "**자료 없음**"
+        elif at_bottom:
+            ok, note = True, f"완료 — 래스터 끝까지 ({south:.2f}N)"
+        elif at_window:
+            ok, note = True, (f"완료 — clip 창 남쪽에서 끝 "
+                              f"({south:.2f}N ≈ {args.clip_south:.2f}N)")
+        else:
+            ok = False
+            w_txt = (f", 창은 {args.clip_south:.2f}N"
+                     if args.clip_south is not None else
+                     " — clip 창 남쪽과 같으면 정상이니 --clip-south 로 확인할 것")
+            note = f"**{frac*100:.0f}% 에서 끊김 — 자료 끝 {south:.2f}N{w_txt}**"
         bad += 0 if ok else 1
         print(f"{tag:<6}{mb:>8.0f} MB  {w:>7,}x{h:<7,}  위|{bar}|아래  {note}")
 

@@ -153,6 +153,10 @@ def main() -> None:
     ap.add_argument("--clip-margin", type=float, default=0.15,
                     help="SAR을 자를 창의 AOI 밖 여유(도). DEM 창과 다르다 — "
                          "모듈 주석의 '넘침' 설명 참고")
+    ap.add_argument("--window", default="",
+                    help="자를 창을 직접 준다 'w,s,e,n'(경위도). 결측이 유역 "
+                         "AOI의 한 귀퉁이에만 있을 때 쓴다 — "
+                         "`gee/Korea_WaterDetection_2025_2026/void_clip_windows.json` 참고")
     ap.add_argument("--only", default="",
                     help="쉼표로 구분한 씬 ID(4자리). 병렬 실행 시 작업을 나눈다")
     args = ap.parse_args()
@@ -164,12 +168,24 @@ def main() -> None:
         if m:
             fps[z] = (m.group(1), footprint(z))
 
+    override = None
+    if args.window:
+        v = [float(x) for x in args.window.split(",")]
+        if len(v) != 4:
+            raise SystemExit("--window 는 'w,s,e,n' 네 값이어야 합니다")
+        override = tuple(v)
+
     jobs = []
     for b in args.basin or list(PAIRS):
         dem, dw, clip, spill = windows(b, args.clip_margin)
         if dem is None:
             print(f"{b}: DEM 없음 — make_basin_dem.py 먼저 실행")
             continue
+        if override is not None:
+            clip = override
+            sx, sy = SPILL
+            spill = (clip[0] - sx, clip[1] - sy, clip[2] + sx, clip[3] + sy)
+            print(f"   (자를 창을 --window 로 직접 지정했다)")
 
         def deg(x):
             return f"{x[0]:.2f}~{x[2]:.2f}E {x[1]:.2f}~{x[3]:.2f}N"
@@ -219,7 +235,9 @@ def main() -> None:
 
     print()
     for i, (b, date, ov, z, dem, wkt) in enumerate(jobs, 1):
-        tag = f"_ext_{b}"
+        # 창을 직접 준 산출은 유역 전체판과 파일명이 겹치면 안 된다
+        tag = f"_ext_{b}" if override is None else \
+            f"_ext_{b}_w{override[0]:.2f}_{override[1]:.2f}".replace(".", "p")
         out_tif = OUT / f"{z.stem}_rtc_db{tag}.tif"
         if out_tif.exists() and out_tif.stat().st_size > 1e6:
             print(f"[{i}/{len(jobs)}] 이미 있음 — {out_tif.name[-30:]}", flush=True)
