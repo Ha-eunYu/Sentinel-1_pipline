@@ -17,11 +17,16 @@ ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임
 [1] 검색·다운로드 (env: s1_pipeline)
     main_s1_list.py      SLC  ─┐   CDSE STAC 검색 -> manifest -> zipper 다운로드
     main_s1_list_grd.py  GRD  ─┘   (이어받기·토큰 자동갱신 지원)
+    search_korea_missing.py   한반도 미보유분 목록만 (다운로드 안 함)
+    download_korea_missing.py 위 목록을 실제로 받기 (로컬·RTC·NAS 보유분 제외)
+    download_aug_pair.py      지정한 씬만 골라 받기 (8월 가뭄 비교쌍 5장)
 
 [2] RTC 전처리 (env: s1_snappy + SNAP Desktop 설치 필요)
     prepro_gpt.py        SLC 1장 -> AOI 서브셋 RTC dB   (batch_slc_rtc.py 로 일괄)
     prepro_grd_gpt.py    GRD 1장 -> 전체 씬 RTC dB      (batch_grd_rtc.py 로 일괄)
     build_rtc_mosaic.py  날짜별 프레임들을 VRT 모자이크로
+    rebuild_mosaic_extdem.py  VH RTC(+external DEM)를 날짜별 모자이크로 (vrt_vh/)
+    check_mosaic_basin_cover.py  그 모자이크가 유역을 덮는지 **유효화소 기준** 검증
 
 [3] 보조 데이터
     download_hand.py     GLO-30 HAND 타일 (수체 탐지 오탐 제거용)
@@ -128,7 +133,11 @@ prepro.py                  # (참고용) esa_snappy GPF 직접 호출 버전 - �
 batch_slc_rtc.py           # SLC 일괄 처리 (SSD 복사, 스킵/재개, AOI 미교차 자동 건너뜀)
 batch_grd_rtc.py           # GRD 일괄 처리 (RTC)
 batch_grd_gtc.py           # GRD 일괄 처리 (GTC, TF 생략 대조군 - RTC_VS_GTC_KR.md)
-batch_grd_rtc_frost.py     # 7월 GRD를 Frost로 재처리 (최신순, 새 폴더 rtc_grd_frost)
+batch_grd_rtc_frost.py     # GRD를 Frost로 재처리 (--month 접두사, 최신순, 새 폴더)
+                           #   VH는 --pol VH --out-dir downloads/rtc_grd_frost_vh --out-tag _vh
+download_aug_pair.py       # 지정 씬만 선별 다운로드 (8월 가뭄 비교쌍 ASC54 5장)
+rebuild_mosaic_extdem.py   # VH RTC 날짜별 모자이크 (vrt_vh/mosaic_<날짜>_vh.vrt)
+check_mosaic_basin_cover.py # 모자이크의 유역 커버리지 검증 (유효화소 기준, 전댐유역.shp)
 rtc_sarsen.py              # SNAP 없이 S1 GRD RTC/GTC (sarsen+COP30, EGM2008 보정, S1C/D 패치) - RTC_SARSEN_KR.md
 build_rtc_mosaic.py        # 날짜별 RTC 모자이크 VRT
 download_hand.py           # GLO-30 HAND 타일 다운로드 + VRT
@@ -185,11 +194,15 @@ downloads/                 # 실행 결과물 (git 미추적)
                             # hand_north_orbit.vrt는 별도 탐색적 분석용(PROGRESS_KR.md 참고)
   dem/                     # NGII DEM AOI 클립
   gtc/                     # GTC 산출물 <씬ID>_gtc_db.tif 분리 보관 (육안 비교 전용, 2026-07-23 이동)
-  rtc_grd_frost/           # 7월 GRD를 Frost로 재처리한 RTC (batch_grd_rtc_frost.py, 기존 rtc_grd와 별도)
+  rtc_grd_frost/           # GRD를 Frost로 재처리한 RTC **VV** (batch_grd_rtc_frost.py, 기존 rtc_grd와 별도)
+  rtc_grd_frost_vh/        # 같은 파이프라인의 **VH** 판 <씬ID>_rtc_db_vh.tif
+                            #   (GEE 수체탐지가 VH를 쓴다 — VV와 약 6 dB 오프셋이라 섞으면 안 됨)
+  rtc_extdem/              # external DEM(유역별 clip) RTC — SNAP 자동 DEM의 하구 결측 회피판
   excluded_china_japan/    # 일본/중국 전용(footprint 0%) 씬 분리 보관 (tif만)
   water/                   # 수체 마스크 (baseline, flood_water_*, diff 등)
     scene_water/           # 단일 씬 수체 지도 (build_water_single_scene.py)
   water_otsu/              # 궤도별·날짜별 타일기반 Otsu 수체 지도 + otsu_thresholds.csv
+    vrt_vh/                #   VH 날짜별 모자이크 mosaic_<날짜>_vh.vrt (gee 쪽이 이 이름을 찾는다)
   monitor_state.json / new_scenes.log  # 신규 씬 감시 상태·로그
 ```
 
@@ -222,6 +235,40 @@ downloads/                 # 실행 결과물 (git 미추적)
 - **SLC RTC "실패 6건"은 정상** — 홍수 AOI(126.61~127.39E, 35.91~36.72N) 미교차
   프레임의 의도된 스킵. post-event SLC(`41E9`/`64C0`/`04E2`)는 보류 중 —
   [TODO_KR.md](TODO_KR.md) P1 참고.
+
+## 연도 간 가뭄 비교용 산출 (VH, 2026-08-07 기준)
+
+홍수 모니터링과 별개로, **댐 유역 가뭄 분석**을 위해 두 해 같은 시기를 견주는
+VH RTC 계열을 따로 쌓고 있다. 수체 판별·변화 산정은 `gee` 프로젝트 폴더에서
+하고, 이 저장소는 **그 입력(RTC·모자이크)까지**를 만든다.
+
+| 시기 쌍 | 궤도 | 씬 | 대상 |
+| --- | --- | --- | --- |
+| 2025-07 ↔ 2026-07 | 여러 궤도 (유역마다 다름) | 다수 | 대권역 21 · 댐유역 38 |
+| **2025-08-06 ↔ 2026-08-02** | **ASC54 (두 해 공통 궤도가 이것뿐)** | 3 + 2 | **댐유역 6** |
+
+- **궤도를 섞지 않는다.** 커버 영역이 달라져 면적 비교가 성립하지 않기 때문이다.
+  8월에 두 해 모두 있는 상대궤도는 ASC54 하나뿐이라 대상이 6개 유역으로 줄었다
+  (섬진강·평림은 ASC54 스와스 밖 — 교차 0%).
+- **8월 쌍은 위성이 다르다** (2025 S1C ↔ 2026 S1D). 8월에는 같은 위성 조합이
+  없다. 임계값이 두 해에 1.5 dB 넘게 벌어지면 보고서에 단서를 달 것 —
+  사전 점검 결과는 [WORKLOG_20260807_KR.md](WORKLOG_20260807_KR.md) 5-3절.
+- 산출 전 과정(7월): [PROCESS_202507_202607_KR.md](PROCESS_202507_202607_KR.md),
+  8월: [WORKLOG_20260807_KR.md](WORKLOG_20260807_KR.md).
+
+```bash
+# 8월 비교쌍 재현 (셋 다 이미 처리된 것은 자동 스킵)
+conda run -n s1_pipeline python download_aug_pair.py
+conda run -n s1_snappy  python batch_grd_rtc_frost.py --month 202508 \
+    --pol VH --out-dir downloads/rtc_grd_frost_vh --out-tag _vh --gpt-c 7G --oldest-first
+conda run -n s1_snappy  python batch_grd_rtc_frost.py --month 202608 \
+    --pol VH --out-dir downloads/rtc_grd_frost_vh --out-tag _vh --gpt-c 7G --oldest-first
+conda run -n sar-gee    python rebuild_mosaic_extdem.py --date 20250806 --date 20260802
+conda run -n sar-gee    python check_mosaic_basin_cover.py
+```
+
+> **⚠ VV와 VH를 섞지 말 것.** GEE 수체탐지는 VH를 쓰고, 실측 오프셋이 약 6 dB다.
+> 두 산출물을 비교하면 RTC 차이가 아니라 **편파 차이**를 재게 된다.
 
 ## 위성 운영 상황과 촬영 일정 확인법
 
@@ -350,3 +397,8 @@ D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 
   픽셀 vs 폴리곤 면적 산출 방식
 - [SCENE_MONITOR_KR.md](SCENE_MONITOR_KR.md) — 한반도 신규 Sentinel-1 촬영 자동
   감시와 윈도우 백그라운드(작업 스케줄러 등) 설정
+- [PROCESS_202507_202607_KR.md](PROCESS_202507_202607_KR.md) — 2025-07 ↔ 2026-07
+  두 시기를 동일 파이프라인으로 처리한 전 과정(씬 선별 → RTC → 모자이크 → Otsu → 면적)
+- [WORKLOG_20260807_KR.md](WORKLOG_20260807_KR.md) — **8월 가뭄 비교쌍**(ASC54
+  2025-08-06 ↔ 2026-08-02) 산출: 쌍 선정 근거, VH RTC, 모자이크, 커버리지 검증,
+  위성 교체(S1C↔S1D) 사전 점검
