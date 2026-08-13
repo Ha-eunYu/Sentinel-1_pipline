@@ -14,7 +14,7 @@
 
 ## #1 🟡 SNAP external DEM에 VRT를 주면 읽지 못한다
 
-### 증상
+**증상**
 
 ```text
 No product reader found for downloads/dem/cop30_korea.vrt
@@ -139,3 +139,33 @@ Warning 3: Cannot find gdalvrt.xsd (GDAL_DATA is not defined)
 conda run -n s1_snappy python -m s1.tools.preprocess.batch_grd_rtc_frost --month 202608 `
     *> temp/logs/_rtc_202608.log
 ```
+
+## #11 🟢 BOM 없는 .ps1은 한글이 깨져 파서 오류를 낸다
+
+**증상**
+
+```text
+식 또는 문에서 예기치 않은 'data-quality"= @{ color = "d93f0b"; desc = "?낅젰' 토큰입니다.
+해시 리터럴이 완전하지 않습니다.
+```
+
+`scripts/create_issues.ps1`을 UTF-8(BOM 없음)로 저장했더니 실행이 안 됐다.
+**Windows PowerShell 5.1은 BOM이 없는 `.ps1`을 시스템 ANSI(CP949)로 읽는다.**
+한글 주석·문자열이 깨지면서 따옴표 짝이 무너져 구문 자체가 망가진다.
+
+**조치** — 저장소의 `.ps1`을 전부 **UTF-8 with BOM**으로 다시 저장했다
+(`archive_gtc.ps1`, `create_issues.ps1`, `monitor_new_scenes.ps1`).
+`create_issues.ps1` 헤더에 경고를 넣었다.
+
+> 편집기가 BOM을 떨구는 일이 있으니, 한글이 든 `.ps1`을 고친 뒤에는
+> `Get-Content -Encoding Byte`로 앞 3바이트가 `EF BB BF`인지 확인하거나
+> 파서로 검사한다:
+>
+> ```powershell
+> $e = $null
+> [System.Management.Automation.Language.Parser]::ParseFile('scripts/x.ps1', [ref]$null, [ref]$e)
+> $e.Count   # 0 이어야 정상
+> ```
+
+같은 이유로 PowerShell로 파일을 쓸 때 `Set-Content`/`Add-Content`는 기본이
+시스템 ANSI다. 다른 도구가 읽을 파일은 `-Encoding utf8`을 명시할 것.

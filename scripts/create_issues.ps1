@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   docs/worklog/ISSUES_KR.md 의 미해결 이슈를 GitHub 이슈로 등록한다.
 
@@ -9,6 +9,12 @@
   전제: GitHub CLI 설치 + 인증
       winget install --id GitHub.cli
       gh auth login          # 저장소 접근 권한 필요 (private repo)
+      # 또는 저장소 1개짜리 fine-grained PAT (Issues: Read and write):
+      #   $env:GH_TOKEN = "github_pat_..."
+
+  ⚠ 이 파일은 반드시 **UTF-8 with BOM**으로 저장할 것. Windows PowerShell 5.1은
+     BOM이 없으면 .ps1 을 시스템 ANSI(CP949)로 읽어 한글이 깨지고, 따옴표 짝이
+     무너져 파서 오류가 난다.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts/create_issues.ps1 -DryRun
@@ -82,7 +88,8 @@ foreach ($i in $issues) {
         "[dry-run] $($i.title)  [$($i.labels -join ', ')]  <- temp/issues/$($i.file)"
         continue
     }
-    $args = @("issue", "create", "--repo", $Repo, "--title", $i.title, "--body-file", $body)
-    foreach ($lb in $i.labels) { $args += @("--label", $lb) }
-    & gh @args
+    # $args 는 PowerShell 자동 변수라 덮어쓰지 않는다.
+    $ghArgs = @("issue", "create", "--repo", $Repo, "--title", $i.title, "--body-file", $body)
+    foreach ($lb in $i.labels) { $ghArgs += @("--label", $lb) }
+    & gh @ghArgs
 }

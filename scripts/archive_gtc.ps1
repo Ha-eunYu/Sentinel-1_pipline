@@ -1,4 +1,4 @@
-# GTC 산출물(*_gtc_db.tif) 아카이브 이동
+﻿# GTC 산출물(*_gtc_db.tif) 아카이브 이동
 #
 # GTC는 육안 비교 전용(수체 탐지에 미사용, RTC_VS_GTC_KR.md 참고)이라, 작업
 # 폴더 downloads/rtc_grd/ 에서 RTC 산출물과 섞여 있던 것을 별도 폴더

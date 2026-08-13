@@ -1,4 +1,4 @@
-# 한반도 신규 Sentinel-1 촬영 감시 래퍼 (monitor_new_scenes.py 구동)
+﻿# 한반도 신규 Sentinel-1 촬영 감시 래퍼 (monitor_new_scenes.py 구동)
 #
 # 사용 예)
 #   단발 실행(Task Scheduler용):  powershell -ExecutionPolicy Bypass -File monitor_new_scenes.ps1
