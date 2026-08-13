@@ -4,8 +4,8 @@
 **홍수일(after) + 비교일(before) 수체 면적(km²)** 을 구한다. 지역별 before/after 비교로
 상시수 대비 홍수 확대분을 본다.
 
-관련: [FLOOD_NORTH_KOREA_KR.md](../FLOOD_NORTH_KOREA_KR.md), [OTSU_SPLIT_BASED_KR.md](../OTSU_SPLIT_BASED_KR.md),
-[WATER_AREA_KR.md](../WATER_AREA_KR.md)
+관련: [FLOOD_NORTH_KOREA_KR.md](../docs/flood/FLOOD_NORTH_KOREA_KR.md), [OTSU_SPLIT_BASED_KR.md](../docs/water/OTSU_SPLIT_BASED_KR.md),
+[WATER_AREA_KR.md](../docs/water/WATER_AREA_KR.md)
 
 ---
 
@@ -50,7 +50,7 @@ QGIS로 그린 GeoPackage. 레이어 `flood_nk_20260725`, **10 MultiPolygon, EPS
 
 ### 2-1. 수체 탐지 임계값 (이번 산정에 사용)
 
-궤도별 split-based Otsu(이봉 타일 풀링, [OTSU_SPLIT_BASED_KR.md](../OTSU_SPLIT_BASED_KR.md)):
+궤도별 split-based Otsu(이봉 타일 풀링, [OTSU_SPLIT_BASED_KR.md](../docs/water/OTSU_SPLIT_BASED_KR.md)):
 
 | 날짜 | 궤도 | 필터 | Otsu 임계값 |
 | --- | --- | --- | --- |

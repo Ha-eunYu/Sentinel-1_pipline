@@ -3,7 +3,7 @@
 SNAP을 설치할 수 없는 환경에서 Sentinel-1 GRD를 RTC(γ0)/GTC로 지형보정하는
 방법. ESA SNAP의 Terrain-Flattening + Terrain-Correction을 순수 파이썬
 ([sarsen](https://github.com/bopen/sarsen) + xarray-sentinel + rasterio)으로
-대체한다. 스크립트: [rtc_sarsen.py](../rtc_sarsen.py). 실행 환경: conda `sarsen_clean`
+대체한다. 스크립트: [rtc_sarsen.py](../s1/tools/preprocess/rtc_sarsen.py). 실행 환경: conda `sarsen_clean`
 (sarsen 0.9.6 + xarray-sentinel main — S1C/D 지원 필수, §B).
 
 ## 왜 sarsen인가 / 대안 비교
