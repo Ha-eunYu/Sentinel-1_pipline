@@ -94,7 +94,38 @@ def main() -> None:
     ap.add_argument("--margin", type=float, default=0.6,
                     help="AOI 밖 여유(도). SAR 자를 창을 덮으면 된다")
     ap.add_argument("--out-dir", type=Path, default=OUT)
+    # 유역이 아니라 **임의 범위**로 굽는다. 저수지 창처럼 유역 경계와 무관한
+    # 대상에 쓴다 — 댐이 5대강에 흩어져 있어 유역별 DEM을 골라 쓰기 번거롭다.
+    ap.add_argument("--bounds", default="",
+                    help="'w,s,e,n'(경위도)로 직접 굽는다. --name 과 같이 쓴다")
+    ap.add_argument("--name", default="custom", help="--bounds 산출 파일명")
     args = ap.parse_args()
+
+    if args.bounds:
+        w, s, e, n = (float(x) for x in args.bounds.split(","))
+        ts = tiles_for(w, s, e, n)
+        if not ts:
+            raise SystemExit("타일 없음")
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+        out = args.out_dir / f"{args.name}_cop30.tif"
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False,
+                                         encoding="ascii") as f:
+            f.write("\n".join(str(t) for t in ts))
+            lst = f.name
+        vrt = args.out_dir / f"_{args.name}.vrt"
+        subprocess.run([str(GDAL / "gdalbuildvrt"), "-overwrite",
+                        "-input_file_list", lst, str(vrt)],
+                       check=True, capture_output=True)
+        subprocess.run([str(GDAL / "gdal_translate"), "-of", "GTiff",
+                        "-projwin", str(w), str(n), str(e), str(s),
+                        "-co", "COMPRESS=DEFLATE", "-co", "TILED=YES",
+                        "-a_nodata", "-32768", str(vrt), str(out)],
+                       check=True, capture_output=True)
+        vrt.unlink(missing_ok=True)
+        Path(lst).unlink(missing_ok=True)
+        print(f"{args.name}  {w:.2f}~{e:.2f}E {s:.2f}~{n:.2f}N  "
+              f"타일 {len(ts)}  {out.stat().st_size/1e6:.0f} MB\n→ {out}")
+        return
 
     if not COP.exists():
         raise SystemExit(f"COP30 타일 폴더 없음: {COP}")

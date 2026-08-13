@@ -184,6 +184,10 @@ def main() -> None:
                          "`gee/Korea_WaterDetection_2025_2026/void_clip_windows.json` 참고")
     ap.add_argument("--only", default="",
                     help="쉼표로 구분한 씬 ID(4자리). 병렬 실행 시 작업을 나눈다")
+    # PAIRS는 7월 쌍으로 굳어 있다. 8월 가뭄 비교쌍처럼 다른 관측일을 패치할 때
+    # 표를 고치는 대신 여기서 덮어쓴다(주면 PAIRS 대신 이 날짜만 처리한다).
+    ap.add_argument("--date", action="append",
+                    help="처리할 관측일 YYYYMMDD. 주면 PAIRS의 날짜를 대신한다")
     args = ap.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -238,7 +242,7 @@ def main() -> None:
               f" 밖이라 무효로 남아도 무해하다)")
         print()
 
-        for date in PAIRS[b]:
+        for date in (args.date or PAIRS[b]):
             for z, (d, fp) in fps.items():
                 if d != date or fp is None:
                     continue

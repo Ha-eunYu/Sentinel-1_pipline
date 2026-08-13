@@ -67,7 +67,28 @@ def main() -> None:
                     help="편파. VH로 돌릴 땐 --out-dir도 따로 줄 것")
     ap.add_argument("--out-tag", default="",
                     help="산출물 파일명 접미사(예: _vh). 같은 폴더에 섞일 때 구분용")
+    # External DEM (2026-08-10 추가)
+    # SNAP에 demName="Copernicus 30m Global DEM"(자동 캐시)을 주면 **하구 수역을
+    # 무효로 해석**해 결측을 만든다 — 영산강 제약면적의 20.2%가 그렇게 날아갔다.
+    # 같은 COP30 값이라도 GeoTIFF로 구워 external로 물리면 결측이 0.00%다
+    # (rtc_basin_extdem.py 모듈 주석의 2026-08-03 실측).
+    # 하구가 포함된 유역(영산강 등)을 다룰 땐 반드시 --dem 을 줄 것.
+    ap.add_argument("--dem", default="",
+                    help="External DEM GeoTIFF 경로. 주면 SNAP 자동 캐시 DEM 대신 "
+                         "이것을 쓴다. ⚠ VRT는 안 된다(Graph execution failed) — "
+                         "GeoTIFF로 구울 것. DEM은 **분석 영역**만 덮으면 되고, "
+                         "granule 가장자리가 DEM 밖이라 무효로 남는 건 정상이다.")
+    ap.add_argument("--dem-nodata", type=float, default=-32768.0,
+                    help="External DEM의 nodata (기본 -32768, COP30 관례)")
+    ap.add_argument("--dem-egm", action="store_true",
+                    help="External DEM에 EGM 지오이드 보정을 적용한다. **COP30에는 "
+                         "주지 말 것** — COP30은 이미 타원체고라 이중 적용되면 "
+                         "약 25 m 어긋난다. NGII처럼 정표고 DEM일 때만 켠다.")
     args = ap.parse_args()
+
+    dem_file = Path(args.dem).resolve() if args.dem else None
+    if dem_file is not None and not dem_file.exists():
+        raise FileNotFoundError(f"External DEM이 없습니다: {dem_file}")
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -83,8 +104,11 @@ def main() -> None:
     zips.sort(key=lambda z: (scene_date(z), z.name), reverse=not args.oldest_first)
 
     order = "오래된순" if args.oldest_first else "최신순"
+    dem_desc = (f"external DEM {dem_file.name} (EGM {'on' if args.dem_egm else 'off'})"
+                if dem_file else "Copernicus 30m Global DEM (SNAP 자동 캐시)")
     print(f"대상 GRD({args.month}, {order}): {len(zips)}개 -> {out_dir} "
           f"(Frost, {args.pol})")
+    print(f"DEM: {dem_desc}")
     for z in zips:
         print(f"  {scene_date(z)}  {z.name}")
 
@@ -106,6 +130,9 @@ def main() -> None:
             shutil.copy2(zip_path, ssd_copy)
             graph = build_grd_rtc_graph(ssd_copy, out_dir=out_dir,
                                         polarization=args.pol,
+                                        external_dem_file=dem_file,
+                                        external_dem_nodata=args.dem_nodata,
+                                        external_dem_apply_egm=args.dem_egm,
                                         out_tag=args.out_tag)  # speckle 기본=Frost
             graph.run(gpt_options=["-q", args.gpt_q, "-c", args.gpt_c])
             print(f"[{i}/{len(zips)}] 완료 ({(time.time() - t0) / 60:.1f}분): {out_tif.name}")
