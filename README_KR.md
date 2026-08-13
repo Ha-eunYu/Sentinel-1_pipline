@@ -176,7 +176,18 @@ env/                       # conda 환경 정의
 filtering/  qa/            # speckle 필터 구현·정량 QA
 data/  kmz/                # 씬 목록 CSV, 공식 침수 kmz
 downloads/                 # 산출물 (git 미추적, 아래 별도 표)
+temp/                      # 임시 작업물 (git 미추적)
+  logs/                    #   배치 실행 로그·에러 (_*.log, _*.err) — 루트에 쌓지 말 것
 ```
+
+> **로그는 `temp/logs/`에 쓴다.** 예전에는 배치 로그가 저장소 루트에 쌓였다
+> (2026-08-13 기준 64개). git에는 안 올라가지만 루트가 어지러워져 옮겼다.
+> 로그에서 반복 확인된 문제는 [ISSUES_KR.md](docs/worklog/ISSUES_KR.md)에 옮겨 적는다.
+>
+> ```powershell
+> conda run -n s1_snappy python -m s1.tools.preprocess.batch_grd_rtc_frost --month 202608 `
+>     *> temp/logs/_rtc_202608.log
+> ```
 
 ### 실행 방법
 
@@ -383,6 +394,12 @@ D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 
 
 ## 관련 문서
 
+- [ISSUES_KR.md](docs/worklog/ISSUES_KR.md) — **이슈 트래킹**: SNAP external DEM(VRT 불가·
+  하구 결측), PowerShell stderr 오탐, 궤도번호 앞 0 유실, 미해결 항목 상태
+- [WORKLOG_20260813_KR.md](docs/worklog/WORKLOG_20260813_KR.md) — 저장소 `s1/` 패키지
+  재구성과 공용 모듈(paths·scene·aoi·batch_runner) 분리 내역
+- [DROUGHT_KR.md](docs/drought/DROUGHT_KR.md) — 25년 7월 대비 26년 7월 남한 가뭄 판정
+  설계, 상대궤도 짝 확정, 말할 수 있는 것 / 없는 것
 - [FLOOD_TIMELINE_KR.md](docs/flood/FLOOD_TIMELINE_KR.md) — **침수 시간선**: 날짜별
   위성영상·침수 면적·남북 분리, 해석 주의사항 (핵심 결과 문서)
 - [FLOOD_NORTH_KOREA_KR.md](docs/flood/FLOOD_NORTH_KOREA_KR.md) — **북한 지역 전용**:

@@ -5,9 +5,10 @@ SLC scene closest to a given area of interest (AOI) and target time, then downlo
 (zip) product via the OData (zipper) API. It is currently configured for **monitoring the July
 2026 Korea flood**, targeting the Sentinel-1A/C/D satellites.
 
-(한국어 버전: [README_KR.md](README_KR.md) — this English README only covers the
-search/download stage and is out of date; see the Korean README for the full pipeline,
-including RTC preprocessing, HAND, water detection, and current data status.)
+(한국어 버전: [README_KR.md](README_KR.md) — the Korean README is the complete one:
+RTC preprocessing, per-orbit Otsu water detection, drought comparison, data inventory,
+and known issues. This English README covers the search/download stage plus the
+repository layout.)
 
 ## TL;DR: steps after cloning
 
@@ -21,10 +22,10 @@ conda activate s1_pipeline
 cp .env.example .env
 # Open .env and fill in CDSE_USERNAME / CDSE_PASSWORD
 
-python main_s1_list.py
+python -m s1.tools.download.main_s1_list
 ```
 
-Yes — after cloning, **running `main_s1_list.py` alone** does the search (manifest saved) and the
+Yes — after cloning, **running `s1.tools.download.main_s1_list` alone** does the search (manifest saved) and the
 download in one go. Please still read "Before you run it" and "Caveats" below first, especially
 the disk-space note.
 
@@ -33,7 +34,7 @@ the disk-space note.
 - conda (miniconda/anaconda)
 - A CDSE (Copernicus Data Space Ecosystem) account — sign up for free at
   <https://dataspace.copernicus.eu>
-  - `main_s1_list.py` authenticates with `CDSE_USERNAME`/`CDSE_PASSWORD` (username/password),
+  - `s1.tools.download.main_s1_list` authenticates with `CDSE_USERNAME`/`CDSE_PASSWORD` (username/password),
     not an OAuth client id/secret.
 - Free disk space (see "Caveats" below — each SLC product is roughly 5-8 GB).
 
@@ -59,24 +60,61 @@ CDSE_PASSWORD=your_cdse_password
 
 ## Project layout
 
+Everything runnable lives in the **`s1/` Python package** (restructured 2026-08-13).
+Run tools from the repository root as modules:
+
+```bash
+python -m s1.tools.download.main_s1_list          # search + download (SLC)
+python -m s1.tools.download.main_s1_list_grd      # same for GRD
+```
+
 ```text
-main_s1_list.py           # Entry point: search -> save manifest -> download
-config.py                 # Loads .env, CDSEConfig / OutputConfig
-Korea_Peninsula.geojson   # Whole Korean peninsula polygon (broad monitoring)
-Korea_flood_AOI.geojson   # Narrow AOI around confirmed flood-damage locations
-stac/
-  client.py               # Opens the CDSE STAC client via pystac_client
-  models.py                # S1SearchConfig, datetime parsing, datetime-range helpers
-  search_s1.py             # STAC search + closest-to-target-time ranking + per-satellite coverage
-  download_s1.py           # CDSE token, OData zipper download (resume support)
-downloads/                 # Run outputs (not committed to git)
+s1/
+  core/
+    paths.py                # Every path defined once, relative to the repo root
+    scene.py                # S1 filename parsing (date, absolute orbit, scene id)
+    aoi.py                  # Footprint (map-overlay.kml) coverage against a boundary
+    config.py               # Loads .env, CDSEConfig / OutputConfig
+  stac/
+    client.py               # Opens the CDSE STAC client via pystac_client
+    models.py               # S1SearchConfig, datetime parsing, datetime-range helpers
+    search_s1.py            # STAC search + closest-to-target ranking + per-satellite coverage
+    download_s1.py          # CDSE token, OData zipper download (resume support)
+  footprint/                # Footprint-based scene selection (not bbox — see below)
+  preprocess/               # SNAP gpt graphs (RTC/GTC) + shared batch runner
+  tools/
+    download/               # main_s1_list*, search_*, download_*
+    preprocess/             # batch_grd_rtc*, batch_grd_gtc, batch_slc_rtc, ...
+    water/                  # water/flood detection, area reporting
+    mosaic/  dem/  audit/  monitor/  scratch/
+docs/                       # Korean docs by topic (pipeline/water/flood/drought/worklog/review)
+geojson/
+  Korea_Peninsula.geojson   # Whole Korean peninsula polygon (broad monitoring)
+  Korea_flood_AOI.geojson   # Narrow AOI around confirmed flood-damage locations
+downloads/                  # Run outputs (not committed to git)
   s1_stac_list_manifest.json
   sentinel1/*.zip
+temp/logs/                  # Batch run logs (not committed)
 ```
+
+Optional editable install so `import s1` works from any directory:
+
+```bash
+pip install -e .
+```
+
+## Why footprint, not bbox
+
+A Sentinel-1 IW frame is a **parallelogram** tilted by the orbit azimuth. Wrapping it in an
+axis-aligned bbox adds triangular slivers the sensor never imaged. When those slivers overlap
+the coastline, a frame that is 100 % ocean is misjudged as "it imaged land" — which once turned
+flood-area numbers into artifacts. `s1/core/aoi.py` and `s1/footprint/` read the real footprint
+polygon from `preview/map-overlay.kml` inside each product and test coverage with
+point-in-polygon instead.
 
 ## Setting the AOI (area of interest)
 
-`main_s1_list.py` defaults to `Korea_flood_AOI.geojson` — a narrow bounding box around the 4
+`s1.tools.download.main_s1_list` defaults to `Korea_flood_AOI.geojson` — a narrow bounding box around the 4
 confirmed flood-damage points.
 
 ```python
@@ -93,7 +131,7 @@ To build a new AOI for different points, edit the `coordinates` in `Korea_flood_
 
 ## Setting the target acquisition time
 
-The `targets` list in `main_s1_list.py` takes a **date only** — results are ranked by date
+The `targets` list in `s1/tools/download/main_s1_list.py` takes a **date only** — results are ranked by date
 proximity, so no time or timezone is needed.
 
 ```python
@@ -117,7 +155,7 @@ targets = [
 ## Running it
 
 ```bash
-python main_s1_list.py
+python -m s1.tools.download.main_s1_list
 ```
 
 This will:
@@ -130,7 +168,7 @@ This will:
 
 ## Caveats (read before running)
 
-- **Running `main_s1_list.py` as-is downloads every candidate found**, not just one. Each
+- **Running `s1.tools.download.main_s1_list` as-is downloads every candidate found**, not just one. Each
   Sentinel-1 SLC product is typically 5-8 GB, so a handful of candidates can require tens of GB.
   Check free disk space first (`df -h`). To limit how many get downloaded, reduce `k` in
   `list_s1_items_for_date(..., k=...)` or cap the `selected_items` loop in `main()`.

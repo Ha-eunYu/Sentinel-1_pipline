@@ -4,17 +4,56 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "s1-sar-pipeline"
-version = "0.1.0"
+version = "0.2.0"
 description = "Sentinel-1 GRD/SLC RTC 전처리와 궤도별 Otsu 수체 판별 파이프라인"
+readme = "README_KR.md"
 requires-python = ">=3.10"
-# 런타임 의존은 conda 환경(env/)으로 관리한다. SNAP(esa_snappy)은 pip으로
-# 설치되지 않으므로 여기에 적지 않는다.
+license = { text = "Proprietary" }
+keywords = ["sentinel-1", "sar", "rtc", "snap", "otsu", "water-detection", "flood", "drought"]
+
+# 런타임 의존은 conda 환경으로 관리한다(env/environment.yml,
+# env/environment_snappy.yml). SNAP 파이썬 바인딩(esa_snappy)은 pip으로 설치되지
+# 않고 SNAP Desktop 설치 후 snappy-conf.bat 으로 연결해야 하므로, 여기에 의존을
+# 적으면 pip install 이 반드시 실패한다. 그래서 비워 둔다.
 dependencies = []
+
+[project.urls]
+Repository = "https://github.com/Ha-eunYu/Sentinel-1_pipline"
+
+[project.optional-dependencies]
+# 검색·다운로드만 쓸 때(s1_pipeline 환경에 해당). 분석용 rasterio/shapely 등은
+# conda 로 까는 편이 윈도우에서 안전하다.
+search = ["pystac-client", "requests", "python-dotenv"]
 
 [tool.setuptools.packages.find]
 include = ["s1*"]
 
+[tool.setuptools.package-data]
+# 그래프 XML·경계 폴리곤은 패키지 밖(graphs/, geojson/)에 있고 저장소 루트 기준
+# 상대경로(s1.core.paths)로 찾는다. 패키지에 동봉할 데이터는 없다.
+"s1" = []
+
 # 실행은 저장소 루트에서 모듈 경로로 한다:
-#     python -m s1.tools.preprocess.batch_grd_rtc_frost --month 202607
-# 개발 설치(어느 디렉터리에서든 import 가능)를 원하면:
-#     pip install -e .
+#     conda run -n s1_snappy python -m s1.tools.preprocess.batch_grd_rtc_frost --month 202607
+#     conda run -n s1_snappy python -m s1.tools.water.build_water_per_date_otsu --dates 2026
+#     conda run -n s1_pipeline python -m s1.tools.download.main_s1_list_grd
+# 어느 디렉터리에서든 import 하려면 개발 설치: pip install -e .
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = [
+    "env",
+    "esa-snappy-master",
+    "sarsen-main",
+    "sarsen-0.9.6",
+    "xarray-sentinel-main",
+    "sardem-sarsen-main",
+    "20260709_flood",
+    "s1/tools/scratch",     # 일회성 조사 스크립트는 검사 제외
+]
+
+[tool.ruff.lint]
+# E501(줄 길이)은 line-length 로 충분하고, 한글 주석이 많아 E203 류는 끈다.
+select = ["E", "F", "W", "I"]
+ignore = ["E203"]
