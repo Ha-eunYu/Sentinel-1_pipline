@@ -85,6 +85,29 @@ def coverage_percent(
     return float(points_in_rings(gx[inside_fp], gy[inside_fp], rings).mean() * 100)
 
 
+def intersects(
+    zip_path: Path | str,
+    boundary_geojson: Path | str = SOUTH_KOREA,
+    *,
+    min_pct: float = 0.5,
+    step_deg: float = GRID_STEP_DEG,
+) -> bool:
+    """이 프레임이 경계와 겹치는가(커버율 >= min_pct).
+
+    **처리 전에** 거르는 용도다. AOI와 겹치지 않는 씬을 SNAP에 넣으면 Subset
+    단계에서 예외가 나는데, 그러면 "대상이 아님"과 "진짜 실패"를 구분할 수 없다.
+    미리 판정하면 전자는 건너뜀으로, 후자만 실패로 집계된다.
+
+    footprint를 읽지 못하는 제품(kml 없음 등)은 **판정 불가로 보고 True**를
+    돌려준다 — 걸러내는 쪽으로 틀리면 멀쩡한 씬을 조용히 빠뜨리기 때문이다.
+    """
+    try:
+        return coverage_percent(zip_path, boundary_geojson, step_deg=step_deg) >= min_pct
+    except (FileNotFoundError, ValueError, KeyError) as e:
+        print(f"  footprint 판정 불가({Path(zip_path).name}: {e}) — 처리 대상으로 둔다")
+        return True
+
+
 def south_korea_scenes(
     zips: Iterable[Path],
     *,

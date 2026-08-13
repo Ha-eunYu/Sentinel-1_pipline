@@ -62,8 +62,9 @@ WATER_AREA_CSV = WATER_OTSU_DIR / "water_area_perrow.csv"
 # --- 벡터·보조 자료 --------------------------------------------------------
 GEOJSON_DIR = PROJECT_DIR / "geojson"
 KOREA_PENINSULA = GEOJSON_DIR / "Korea_Peninsula.geojson"
-SOUTH_KOREA = GEOJSON_DIR / "South_Korea.geojson"
+SOUTH_KOREA = GEOJSON_DIR / "South_Korea.geojson"   # ⚠ 해안·도서 제외 (ISSUES_KR #7)
 NORTH_KOREA = GEOJSON_DIR / "NK.geojson"
+KOREA_FLOOD_AOI = GEOJSON_DIR / "Korea_flood_AOI.geojson"
 GRAPHS_DIR = PROJECT_DIR / "graphs"
 DATA_DIR = PROJECT_DIR / "data"
 DOCS_DIR = PROJECT_DIR / "docs"
