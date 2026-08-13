@@ -14,7 +14,7 @@
 
 ## #1 🟡 SNAP external DEM에 VRT를 주면 읽지 못한다
 
-**증상**
+### 증상
 
 ```text
 No product reader found for downloads/dem/cop30_korea.vrt
@@ -24,13 +24,13 @@ No product reader found for downloads/dem/cop30_korea.vrt
 SNAP `Terrain-Flattening`/`Terrain-Correction`의 `externalDEMFile`에 GDAL VRT를
 주면 리더를 찾지 못하고 그래프가 실패한다.
 
-**조치**: DEM을 **GeoTIFF로 구워서** 넘긴다.
+**조치** — DEM을 **GeoTIFF로 구워서** 넘긴다.
 [make_basin_dem.py](../../s1/tools/dem/make_basin_dem.py)가 COP30 타일을 유역·임의
 범위로 잘라 GeoTIFF로 만들고,
 [batch_grd_rtc_frost.py](../../s1/tools/preprocess/batch_grd_rtc_frost.py)의 `--dem`
 도움말에 "VRT는 안 된다"를 명시해 두었다.
 
-**남은 것**: 근본 해결(SNAP이 VRT를 읽게 하는 방법)은 확인하지 않았다. 현재는
+**남은 것** — 근본 해결(SNAP이 VRT를 읽게 하는 방법)은 확인하지 않았다. 현재는
 GeoTIFF 우회로 충분하다.
 
 ## #2 🟡 SNAP 자동 캐시 COP30이 하구 수역을 결측으로 만든다
@@ -39,7 +39,7 @@ GeoTIFF 우회로 충분하다.
 돌리면 하구 수역이 무효로 해석돼 결측이 생긴다. **영산강 제약면적의 20.2%**가
 그렇게 날아갔다(2026-08-03 실측).
 
-**조치**: 같은 COP30 값이라도 **GeoTIFF로 구워 external DEM으로 물리면 결측
+**조치** — 같은 COP30 값이라도 **GeoTIFF로 구워 external DEM으로 물리면 결측
 0.00%**다. 하구가 포함된 유역은 `--dem`을 반드시 주고 처리한다
 ([rtc_basin_extdem.py](../../s1/tools/preprocess/rtc_basin_extdem.py) 모듈 주석).
 
@@ -59,7 +59,7 @@ conda : SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
     + FullyQualifiedErrorId : NativeCommandError
 ```
 
-**조치**: 성공 여부는 stderr가 아니라 **배치 러너가 찍는 요약행**으로 판단한다
+**조치** — 성공 여부는 stderr가 아니라 **배치 러너가 찍는 요약행**으로 판단한다
 (`배치 완료: 성공 N / 건너뜀 N / 실패 N`). 로그 감시 필터를 만들 때도 이
 요약행과 `실패:` 라인을 봐야 한다. 네이티브 명령에 `2>&1`을 붙이지 말 것.
 
@@ -69,7 +69,7 @@ conda : SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
 `8632`로 전달한다. 6자리 매칭이 전부 실패해 "처리할 그룹이 없습니다"로 즉시
 종료했다(2026-07-30).
 
-**조치**: 인자를 따옴표로 묶고,
+**조치** — 인자를 따옴표로 묶고,
 [scene.py](../../s1/core/scene.py)의 `normalize_orbit()`이 `zfill(6)`으로 정규화한다.
 
 ## #6 🟡 GDAL_DATA 미설정 경고
@@ -84,16 +84,28 @@ Warning 3: Cannot find gdalvrt.xsd (GDAL_DATA is not defined)
 
 ## #7 🔴 `geojson/South_Korea.geojson`이 해안·도서를 제외한다
 
-[download_south_korea_month.py](../../s1/tools/download/download_south_korea_month.py)
-주석에 따르면 이 폴리곤은 **부산·강릉·여수·해남·완도·제주를 전부 제외**하는
-거친 내륙 덩어리다.
+좌표로 실측했다(2026-08-13). 이 폴리곤은 **꼭짓점 13개짜리 단일 폴리곤**이고,
+남해안·동해안·서남해 도서·제주가 통째로 빠진 내륙 덩어리다.
 
-**영향**: 26년·25년 7월 남한 궤도 선별
+| 도시 | South_Korea.geojson | Korea_Peninsula.geojson |
+| --- | --- | --- |
+| 서울·대전·대구 | 내부 | 내부 |
+| 부산·울산·포항 | **제외** | 내부 |
+| 강릉 | **제외** | 내부 |
+| 여수·해남·완도·목포 | **제외** | 내부 |
+| 제주 | **제외** | 내부 |
+
+폴리곤 범위 `lon 126.259~129.280 / lat 34.690~38.837`.
+(비교: Korea_Peninsula는 링 1,766개·꼭짓점 9,711개의 실제 해안선)
+[download_south_korea_month.py](../../s1/tools/download/download_south_korea_month.py)
+주석도 같은 문제를 지적하고 대권역 shp를 쓰고 있다.
+
+**영향** — 26년·25년 7월 남한 궤도 선별
 ([PROCESS_202507_202607_KR.md](../pipeline/PROCESS_202507_202607_KR.md) 1절)이
 이 폴리곤을 썼다. 기록된 남한 커버율이 해안·도서만큼 과소평가돼 있고,
 "남한 0%"로 제외한 궤도 중 제주·해남을 실제로 찍은 것이 섞여 있을 수 있다.
 
-**해야 할 것**: 대권역 shp(`s1.core.paths.BASIN_SHP`) 기준으로 커버율을 다시
+**해야 할 것** — 대권역 shp(`s1.core.paths.BASIN_SHP`) 기준으로 커버율을 다시
 재고, 선별 결과가 바뀌면 문서를 갱신한다.
 
 ## #8 🔴 연도 간 관측 범위가 2배 달라 면적 비교가 성립하지 않는다
@@ -102,7 +114,7 @@ Warning 3: Cannot find gdalvrt.xsd (GDAL_DATA is not defined)
 **8.79억 vs 17.85억**으로 관측 범위가 2배 차이다(프레임 2개 vs 5개).
 면적을 그대로 견주면 "26년에 물이 늘었다"는 틀린 결론이 나온다.
 
-**해야 할 것**: 교집합 footprint로 잘라 재집계
+**해야 할 것** — 교집합 footprint로 잘라 재집계
 ([DROUGHT_KR.md](../drought/DROUGHT_KR.md) 3절).
 
 ## #9 🔴 26년 7/14 두 궤도가 젖은 토양으로 과대추정된다
@@ -111,7 +123,7 @@ Warning 3: Cannot find gdalvrt.xsd (GDAL_DATA is not defined)
 2~3 dB 높고 분리도 η도 0.51/0.57로 낮다. 면적이 Refined Lee 대비 +39% / +17%로
 뛰었다. 태풍 직후 젖은 토양이 넓게 어두워지며 이봉 구조가 무너진 것으로 보인다.
 
-**조치**: 검증 전 사용 금지로 표시
+**조치** — 검증 전 사용 금지로 표시
 ([WATER_AREA_KR.md](../water/WATER_AREA_KR.md)). 25년 7/19 fallback 궤도도 동일.
 
 ## #10 🟡 실행 로그가 저장소 루트에 쌓인다
@@ -120,7 +132,7 @@ Warning 3: Cannot find gdalvrt.xsd (GDAL_DATA is not defined)
 (2026-08-13 기준 64개, 442 KB). git에는 안 올라가지만(`*.log`/`*.err` 무시)
 루트를 어지럽힌다.
 
-**조치**: `temp/logs/`로 옮기고 그 폴더를 통째로 무시하도록 했다. 앞으로
+**조치** — `temp/logs/`로 옮기고 그 폴더를 통째로 무시하도록 했다. 앞으로
 배치 로그는 이 폴더에 쓴다.
 
 ```powershell
