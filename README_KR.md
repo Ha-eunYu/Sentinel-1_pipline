@@ -252,39 +252,79 @@ downloads/
   프레임의 의도된 스킵. post-event SLC(`41E9`/`64C0`/`04E2`)는 보류 중 —
   [TODO_KR.md](docs/worklog/TODO_KR.md) P1 참고.
 
-## 연도 간 가뭄 비교용 산출 (VH, 2026-08-07 기준)
+## 연도 간 가뭄 비교용 산출 (VH + external DEM)
 
 홍수 모니터링과 별개로, **댐 유역 가뭄 분석**을 위해 두 해 같은 시기를 견주는
 VH RTC 계열을 따로 쌓고 있다. 수체 판별·변화 산정은 `gee` 프로젝트 폴더에서
 하고, 이 저장소는 **그 입력(RTC·모자이크)까지**를 만든다.
 
-| 시기 쌍 | 궤도 | 씬 | 대상 |
-| --- | --- | --- | --- |
-| 2025-07 ↔ 2026-07 | 여러 궤도 (유역마다 다름) | 다수 | 대권역 21 · 댐유역 38 |
-| **2025-08-06 ↔ 2026-08-02** | **ASC54 (두 해 공통 궤도가 이것뿐)** | 3 + 2 | **댐유역 6** |
+### 8월 쌍 (2026-08-12 기준)
+
+| 대상 | 궤도 | 2025 | 2026 | 위성 | 공통 관측(제약) |
+| --- | --- | --- | --- | --- | ---: |
+| 댐유역 6 (안동·임하·밀양·영천·성덕·운문) + 낙동강 | ASC54 | 08-06 | 08-02 | 1C↔1D | 99.3%+ |
+| 섬진강·영산강·평림 | ASC127 | 08-11 | 08-07 | 1C↔1D | 99.9%+ |
+| 금강 | ASC127 | 08-11 | 08-07 | 1C↔1D | 99.95% |
+| **한강** | ASC54 | **08-12** | 08-02 | **1A↔1D** | **78.8%** |
 
 - **궤도를 섞지 않는다.** 커버 영역이 달라져 면적 비교가 성립하지 않기 때문이다.
-  8월에 두 해 모두 있는 상대궤도는 ASC54 하나뿐이라 대상이 6개 유역으로 줄었다
-  (섬진강·평림은 ASC54 스와스 밖 — 교차 0%).
-- **8월 쌍은 위성이 다르다** (2025 S1C ↔ 2026 S1D). 8월에는 같은 위성 조합이
-  없다. 임계값이 두 해에 1.5 dB 넘게 벌어지면 보고서에 단서를 달 것 —
-  사전 점검 결과는 [WORKLOG_20260807_KR.md](docs/worklog/WORKLOG_20260807_KR.md) 5-3절.
-- 산출 전 과정(7월): [PROCESS_202507_202607_KR.md](docs/pipeline/PROCESS_202507_202607_KR.md),
-  8월: [WORKLOG_20260807_KR.md](docs/worklog/WORKLOG_20260807_KR.md).
+  **8개 유역을 한 궤도로 덮는 날은 두 해 모두 없어** 유역별로 궤도를 배정한다.
+- **한강만 위성 조합이 다르다.** 2025-08-06(1C)은 한강 공통 관측이 69.3%가
+  상한이라, 커버리지를 택해 08-12(1A)를 썼다. 나머지는 전부 1C↔1D다.
+- **관측일의 프레임을 다 돌릴 필요는 없다.** 프레임을 하나씩 빼며 커버리지가
+  떨어지는지 보면(leave-one-out) 기여 없는 것이 드러난다 — 8월에는 14장 중
+  4장이 그랬다.
+- 전 과정: 7월 [PROCESS_202507_202607_KR.md](docs/pipeline/PROCESS_202507_202607_KR.md) ·
+  8월 [WORKLOG_20260807_KR.md](docs/worklog/WORKLOG_20260807_KR.md) →
+  [WORKLOG_20260810_12_KR.md](docs/worklog/WORKLOG_20260810_12_KR.md)
+
+### external DEM은 선택이 아니다
+
+SNAP에 `demName="Copernicus 30m Global DEM"`(자동 캐시)을 주면 **하구 수역을
+무효로 해석**한다. 같은 granule을 두 방식으로 처리해 실측한 결과, 낙동강 제약
+안에서 **12.48 km²**가 자동 DEM에서만 결측이었다(두 해 모두 동일). 영산강에서는
+제약의 20.2%였다. 같은 패스의 프레임이 전부 같은 DEM을 쓰므로 **모자이크로도
+안 메워진다.**
 
 ```bash
-# 8월 비교쌍 재현 (셋 다 이미 처리된 것은 자동 스킵)
-conda run -n s1_pipeline python download_aug_pair.py
-conda run -n s1_snappy  python batch_grd_rtc_frost.py --month 202508 \
-    --pol VH --out-dir downloads/rtc_grd_frost_vh --out-tag _vh --gpt-c 7G --oldest-first
-conda run -n s1_snappy  python batch_grd_rtc_frost.py --month 202608 \
-    --pol VH --out-dir downloads/rtc_grd_frost_vh --out-tag _vh --gpt-c 7G --oldest-first
-conda run -n sar-gee    python rebuild_mosaic_extdem.py --date 20250806 --date 20260802
-conda run -n sar-gee    python check_mosaic_basin_cover.py
+python -m s1.tools.dem.make_basin_dem --bounds 125.0,32.9,131.0,39.9 --name korea_full
+```
+
+`downloads/dem_basin/korea_full_cop30.tif`(37타일 733 MB)가 **대권역 21개 +
+댐유역 8개를 nodata 0개로** 덮는다(제주 포함). 유역별 DEM을 고를 필요가 없다.
+
+⚠ 세 가지
+
+- **VRT는 external DEM으로 못 읽는다** — GeoTIFF로 구울 것(패치 20건 전부 실패).
+- **`--dem-egm`을 켜지 말 것** — COP30은 타원체고라 이중 보정되면 약 25 m 어긋난다.
+- **한 비교쌍 안에서 DEM 방식을 섞지 말 것** — DEM을 바꾸면 dB가 이동한다
+  (실측 P50 +0.4 dB). 두 해가 같이 움직이면 비교는 유지되지만, 한쪽만 바꾸면
+  변화율이 최대 4.5%p 어긋난다.
+
+### 재현
+
+```bash
+# 1) 수집 — 날짜·궤도·씬ID로 지정
+conda run -n s1_pipeline python -m s1.tools.download.download_scenes \
+    --date 2026-08-02 --orbit 54 --id 17B9
+
+# 2) VH RTC (external DEM). 이미 처리된 씬은 자동 스킵
+conda run -n s1_snappy python -m s1.tools.preprocess.batch_grd_rtc_frost \
+    --month 202508 --only 2B35,9FBB --pol VH \
+    --out-dir downloads/rtc_grd_frost_vh --out-tag _vh \
+    --dem downloads/dem_basin/korea_full_cop30.tif --gpt-c 7G
+
+# 3) 날짜별 모자이크 → 4) 유역 커버리지 검증(유효화소 기준)
+conda run -n sar-gee python -m s1.tools.mosaic.rebuild_mosaic_extdem --date 20250811
+conda run -n sar-gee python -m s1.tools.audit.check_mosaic_basin_cover
 ```
 
 > **⚠ VV와 VH를 섞지 말 것.** GEE 수체탐지는 VH를 쓰고, 실측 오프셋이 약 6 dB다.
 > 두 산출물을 비교하면 RTC 차이가 아니라 **편파 차이**를 재게 된다.
+>
+> **결측은 두 갈래로 나눠 봐야 한다.** footprint 안인데 무효면 DEM 결함이라
+> 고칠 수 있고, footprint 밖이면 안 찍힌 것이라 못 고친다. 한강 제약 결측
+> 21.1%는 후자이고, DEM 결함은 0.15%뿐이었다.
 
 ## 위성 운영 상황과 촬영 일정 확인법
 
