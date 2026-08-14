@@ -39,7 +39,7 @@ from pathlib import Path
 
 from s1.core.config import CDSEConfig, load_env
 from s1.core.paths import DATA_DIR, KOREA_PENINSULA, PROJECT_DIR, SOUTH_KOREA, rel
-from s1.footprint import footprint_overlap_ratio, load_boundary_union
+from s1.footprint import load_boundary_union
 from s1.stac.client import open_cdse_stac_client
 
 REPEAT_ORBITS = 175  # Sentinel-1 반복주기: 175궤도 = 12일
@@ -68,6 +68,23 @@ def jeju_union():
             if w <= c.x <= e and s <= c.y <= n:
                 picked.append(p)
     return unary_union(picked) if picked else None
+
+
+def overlap(geom: dict, boundary) -> float:
+    """footprint 면적 대비 경계와의 교집합 비율(%).
+
+    s1.footprint.footprint_overlap_ratio 는 경계를 파일 경로로 받는데, 제주는
+    별도 파일이 없어 shapely 객체로만 존재한다. 세 경계(한반도·남한·제주)를
+    같은 방식으로 다루려고 여기서 shapely 객체를 직접 받는다.
+    """
+    from shapely.geometry import shape
+
+    if not geom or boundary is None:
+        return 0.0
+    fp = shape(geom)
+    if fp.area == 0:
+        return 0.0
+    return float(fp.intersection(boundary).area / fp.area) * 100
 
 
 def month_range(year: int, month: int) -> str:
@@ -102,11 +119,15 @@ def main() -> None:
 
     for year in args.years:
         for month in args.months:
+            # 검색은 **bbox**로 한다. Korea_Peninsula는 꼭짓점 9,711개짜리
+            # MultiPolygon이라 intersects로 넘기면 URL이 감당 못 해 서버가
+            # JSON이 아닌 오류 페이지를 돌려준다(JSONDecodeError). 느슨한 상자로
+            # 받아온 뒤 아래에서 footprint 겹침으로 정확히 거른다.
             search = client.search(
                 collections=[args.collection],
                 datetime=month_range(year, month),
                 query={"sar:instrument_mode": {"eq": "IW"}},
-                intersects=kp.__geo_interface__,
+                bbox=list(kp.bounds),
                 limit=100,
             )
             n = 0
@@ -119,11 +140,11 @@ def main() -> None:
                 rel_orb = p.get("sat:relative_orbit") or p.get("relativeOrbitNumber")
                 abs_orb = p.get("sat:absolute_orbit") or p.get("orbitNumber")
                 platform = (p.get("platform") or "").upper()
-                kp_pct = footprint_overlap_ratio(geom, kp) * 100
+                kp_pct = overlap(geom, kp)
                 if kp_pct <= 0:
                     continue  # 한반도 미교차(중국/일본/공해)
-                sk_pct = footprint_overlap_ratio(geom, sk) * 100
-                jeju_pct = (footprint_overlap_ratio(geom, jeju) * 100) if jeju else 0.0
+                sk_pct = overlap(geom, sk)
+                jeju_pct = overlap(geom, jeju)
                 rows.append({
                     "date": (p.get("datetime") or "")[:10],
                     "platform": platform,
