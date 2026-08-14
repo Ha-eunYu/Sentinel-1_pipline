@@ -75,12 +75,16 @@ foreach ($procId in $waitIds) {
 $ids = $Scenes.Split(",") | ForEach-Object { $_.Trim().ToUpper() } | Where-Object { $_ }
 $targets = @()
 foreach ($sceneId in $ids) {
-    $targets += Get-ChildItem (Join-Path $root $OutDir) -Filter "*_${Month}*_${sceneId}_*_vh.tif" -ErrorAction SilentlyContinue
+    # 씬 ID 뒤에 밑줄을 강제하지 않는다. 입력이 `..._6D9F.SAFE.zip` 이면 산출물이
+    # `..._6D9F.SAFE_rtc_db_vh.tif` 라서 `_6D9F_` 패턴에 걸리지 않는다. 그러면
+    # 삭제가 빠지고 배치가 "이미 처리됨"으로 건너뛴다(2026-08-14 실제 사고).
+    $targets += Get-ChildItem (Join-Path $root $OutDir) -Filter "*_${Month}*_${sceneId}*_vh.tif" -ErrorAction SilentlyContinue
 }
+$targets = $targets | Sort-Object FullName -Unique
 "삭제 대상 $($targets.Count)개 (씬 $($ids.Count)개 요청)"
 foreach ($t in $targets) { "  - $($t.Name)  $([math]::Round($t.Length/1GB,2)) GB" }
 
-$missing = $ids | Where-Object { $sid = $_; -not ($targets | Where-Object { $_.Name -match "_${sid}_" }) }
+$missing = $ids | Where-Object { $sid = $_; -not ($targets | Where-Object { $_.Name -match "_$sid" }) }
 if ($missing) { "기존 산출물 없음(신규 처리됨): $($missing -join ', ')" }
 
 if ($DryRun) { "[dry-run] 삭제·재처리는 하지 않는다."; return }

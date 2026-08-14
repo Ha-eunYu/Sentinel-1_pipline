@@ -75,7 +75,10 @@ $issues = @(
        labels = @("data-quality", "snap") },
     @{ file = "14_powershell_file_args.md"
        title = "PowerShell -File 인자 변환과 Wait-Process 9시간 한도"
-       labels = @("tooling") }
+       labels = @("tooling") },
+    @{ file = "15_safe_zip_scene_pattern.md"
+       title = ".SAFE.zip 입력의 산출물명이 씬 ID 패턴에서 빠져 재처리가 조용히 건너뛰어짐"
+       labels = @("tooling", "data-quality") }
 )
 
 # gh 찾기. 설치 직후 열려 있던 셸은 PATH가 갱신되지 않아 Get-Command 로는 못

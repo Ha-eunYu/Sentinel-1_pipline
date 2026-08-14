@@ -29,8 +29,9 @@
 | #10 | — | 로그가 루트에 쌓임 (해결, 등록 안 함) |
 | #11 | [#9] | PowerShell 한글 인코딩 |
 | #12 | [#10] | 상대궤도 오프셋 오판 |
-| #13 | (등록 대기) | external DEM 범위 혼재 |
-| #14 | (등록 대기) | PowerShell `-File` 인자·`Wait-Process` 한도 |
+| #13 | [#11] | external DEM 범위 혼재 |
+| #14 | [#12] | PowerShell `-File` 인자·`Wait-Process` 한도 |
+| #15 | (등록 대기) | `.SAFE.zip` 산출물명이 씬 ID 패턴에서 빠짐 |
 
 > ✅ **GitHub #6은 #8의 중복이라 닫았다**(2026-08-14). 제목을 정정하면서 문구가
 > 바뀌어(“2배 차이” 삭제) 중복 검사가 빗나갔다. 재발 방지로
@@ -296,3 +297,30 @@ The 86400 argument is greater than the maximum allowed range of 32767
 ```powershell
 while (Get-Process -Id $procId -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 60 }
 ```
+
+## #15 🟢 `.SAFE.zip` 입력의 산출물명이 씬 ID 패턴에서 빠진다
+
+### 증상
+
+재처리 스크립트가 `6D9F`를 **"기존 산출물 없음(신규 처리됨)"** 으로 보고했는데,
+실제로는 2.19 GB짜리 옛 산출물이 있었다. 삭제가 안 되니 배치가 그대로
+`건너뜀 (이미 처리됨)` 으로 넘어가, **재처리한 줄 알았는데 옛 파일이 남았다.**
+
+원인은 파일명이다. 입력이 `..._0069E2_6D9F.SAFE.zip`이면 `Path.stem`이
+`..._6D9F.SAFE`가 되어 산출물이 이렇게 나온다.
+
+```text
+보통:      S1C_..._0069E2_38C3_rtc_db_vh.tif        ← _38C3_ 로 끝나 패턴에 걸림
+.SAFE.zip: S1C_..._0069E2_6D9F.SAFE_rtc_db_vh.tif   ← _6D9F. 라서 `_6D9F_` 패턴에 안 걸림
+```
+
+CDSE에서 받은 zip 중 일부만 `.SAFE.zip`이라(현재 저장소에 1건) 평소엔 드러나지
+않는다.
+
+**조치** — 씬 ID 뒤에 밑줄을 강제하지 않는다:
+`*_${sceneId}*_vh.tif`. [rebake_vh_extdem.ps1](../../scripts/rebake_vh_extdem.ps1)
+수정 완료. 파이썬 쪽은 `s1.core.scene.parse_scene`이 정규식으로 뽑아 영향 없다.
+
+> **일반 규칙**: 파일명으로 씬을 찾을 때 **`_<ID>_` 처럼 뒤를 고정하지 말 것.**
+> 확장자·접미사 조합이 제품마다 다르다. 파이썬에서는 `s1.core.scene`의
+> `scene_id()` / `matches_scene_id()` 를 쓴다.

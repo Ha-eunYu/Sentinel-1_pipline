@@ -1,13 +1,15 @@
 {
-  "_comment": "본문 파일 -> GitHub 이슈 번호 매핑. create_issues.ps1 이 읽고 쓴다. 제목이 바뀌어도 같은 이슈를 다시 만들지 않게 하는 장치(2026-08-14, GH #6/#8 중복 사고).",
-  "_repo": "Ha-eunYu/Sentinel-1_pipline",
-  "01_snap_vrt_dem.md": 1,
-  "02_snap_cop30_estuary_void.md": 2,
-  "04_powershell_stderr.md": 3,
-  "06_gdal_data_warning.md": 4,
-  "07_south_korea_polygon.md": 5,
-  "08_common_footprint_mask.md": 8,
-  "09_wet_soil_overestimation.md": 7,
-  "11_powershell_korean_encoding.md": 9,
-  "12_relative_orbit_offset.md": 10
+    "_comment":  "본문 파일 -\u003e GitHub 이슈 번호 매핑. create_issues.ps1 이 읽고 쓴다.",
+    "_repo":  "Ha-eunYu/Sentinel-1_pipline",
+    "01_snap_vrt_dem.md":  1,
+    "02_snap_cop30_estuary_void.md":  2,
+    "04_powershell_stderr.md":  3,
+    "06_gdal_data_warning.md":  4,
+    "07_south_korea_polygon.md":  5,
+    "08_common_footprint_mask.md":  8,
+    "09_wet_soil_overestimation.md":  7,
+    "11_powershell_korean_encoding.md":  9,
+    "12_relative_orbit_offset.md":  10,
+    "13_external_dem_extent.md":  11,
+    "14_powershell_file_args.md":  12
 }
