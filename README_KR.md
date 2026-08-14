@@ -25,7 +25,8 @@ ESA SNAP(gpt)으로 RTC(Radiometric Terrain Correction) 전처리한 뒤, dB 임
     download_aug_pair.py      지정한 씬만 골라 받기 (8월 가뭄 비교쌍 5장)
 
 [2] RTC 전처리 (env: s1_snappy + SNAP Desktop 설치 필요)
-    prepro_gpt.py        SLC 1장 -> AOI 서브셋 RTC dB   (batch_slc_rtc.py 로 일괄)
+    prepro_gpt.py        SLC 1장 -> AOI 서브셋 RTC dB   (batch_slc_rtc.py 로 일괄;
+                         AOI 미교차 씬은 처리 전 footprint 판정으로 제외한다)
     prepro_grd_gpt.py    GRD 1장 -> 전체 씬 RTC dB      (batch_grd_rtc.py 로 일괄)
     build_rtc_mosaic.py  날짜별 프레임들을 VRT 모자이크로
     rebuild_mosaic_extdem.py  VH RTC(+external DEM)를 날짜별 모자이크로 (vrt_vh/)
