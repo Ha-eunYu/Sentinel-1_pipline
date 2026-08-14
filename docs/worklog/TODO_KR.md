@@ -22,7 +22,14 @@
 - [ ] **비교 본선 4궤도 우선 처리** — rel 134(25-07-18 C ↔ 26-07-20 C),
       rel 54(25-07-25 C ↔ 26-07-15 C). 나머지보다 먼저 끝내면 결과를 빨리 본다.
 - [ ] **25·26년 8월 미처리 3씬** + 8월 기존 13씬 재처리
-- [ ] 완료 후 **궤도별 Otsu 수체탐지** 재실행(VH 기준으로 전량)
+
+> **이 프로젝트의 범위는 RTC까지다(2026-08-14 결정).** VH external DEM RTC가
+> 끝나면 여기서 마친다. **수체탐지는 다른 프로젝트에서 진행**하므로 이 저장소의
+> `build_water_per_date_otsu.py` 재실행은 계획에 넣지 않는다.
+> 넘길 것: `downloads/rtc_grd_frost_vh/*_rtc_db_vh.tif`(전량 external DEM),
+> 처리 조건은 [PROCESS_202507_202607_KR.md](../pipeline/PROCESS_202507_202607_KR.md)
+> 2절, 궤도 선별 근거는
+> [RELATIVE_ORBITS_KR.md](../pipeline/RELATIVE_ORBITS_KR.md).
 
 ## P0.2 — 연도 간 비교 설계 (2026-08-14 확정, 실행 대기)
 
@@ -44,8 +51,12 @@
 - [ ] **2025년 S1C를 쓸 때는 그 달 오프셋을 STAC으로 확인**하고 시작
       (`relative_orbit_survey.py --years 2025 --months ...`). 표의 171은
       7·8월에서만 확인한 값이다.
-- [ ] 제주 전용 COP30 clip → rel 134 씬으로 제주 수체 산출 (현재 보류)
-- [ ] SLC 컬렉션 상대궤도 조사(`--collection sentinel-1-slc`)
+- [ ] 제주 전용 COP30 clip → rel 134 씬으로 제주 RTC (현재 보류)
+- ~~SLC 컬렉션 상대궤도 조사~~ — **불필요, 제외(2026-08-14)**.
+  수면적 산출의 입력은 GRD다. SLC는 **간섭(coherence·InSAR)** 을 할 때만 필요한데
+  이 프로젝트 범위가 아니다. 조사 도구에 `--collection` 옵션이 있어 관성으로
+  적어둔 항목이었다. 나중에 coherence 분석을 하게 되면 그때
+  `relative_orbit_survey.py --collection sentinel-1-slc` 한 줄로 확인한다.
 
 ## P0.3 — 정정 전파 (2026-08-14)
 
