@@ -69,7 +69,13 @@ $issues = @(
        labels = @("tooling") },
     @{ file = "12_relative_orbit_offset.md"
        title = "절대궤도 175배수 산술로 상대궤도를 판단해 25/26년 짝을 잘못 지음 (S1C 오프셋 변경)"
-       labels = @("data-quality", "analysis") }
+       labels = @("data-quality", "analysis") },
+    @{ file = "13_external_dem_extent.md"
+       title = "external DEM 범위가 산출물마다 달라 제주·남해안이 빠진 씬이 섞임"
+       labels = @("data-quality", "snap") },
+    @{ file = "14_powershell_file_args.md"
+       title = "PowerShell -File 인자 변환과 Wait-Process 9시간 한도"
+       labels = @("tooling") }
 )
 
 # gh 찾기. 설치 직후 열려 있던 셸은 PATH가 갱신되지 않아 Get-Command 로는 못

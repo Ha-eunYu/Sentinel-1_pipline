@@ -435,8 +435,12 @@ D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 
 
 ## 관련 문서
 
+- [RELATIVE_ORBITS_KR.md](docs/pipeline/RELATIVE_ORBITS_KR.md) — **상대궤도 인벤토리**
+  (22~26년 7·8월): 위성별 오프셋, 연도 간 비교 짝, 제주 커버 궤도, 장기 설계
 - [ISSUES_KR.md](docs/worklog/ISSUES_KR.md) — **이슈 트래킹**: SNAP external DEM(VRT 불가·
   하구 결측), PowerShell stderr 오탐, 궤도번호 앞 0 유실, 미해결 항목 상태
+- [WORKLOG_20260814_KR.md](docs/worklog/WORKLOG_20260814_KR.md) — **최신**: 상대궤도 재정립
+  (5개년 인벤토리·궤도 짝 정정), VH external DEM 통일, 오늘 밟은 함정 6건
 - [WORKLOG_20260813_KR.md](docs/worklog/WORKLOG_20260813_KR.md) — 저장소 `s1/` 패키지
   재구성과 공용 모듈(paths·scene·aoi·batch_runner) 분리 내역
 - [DROUGHT_KR.md](docs/drought/DROUGHT_KR.md) — 25년 7월 대비 26년 7월 남한 가뭄 판정

@@ -8,7 +8,7 @@
 - 새 이슈는 맨 아래에 번호를 이어 붙인다.
 
 관련: [TODO_KR.md](TODO_KR.md)(할 일) · [PROGRESS_KR.md](PROGRESS_KR.md)(진행상황) ·
-[WORKLOG_20260813_KR.md](WORKLOG_20260813_KR.md)(최근 작업일지)
+[WORKLOG_20260814_KR.md](WORKLOG_20260814_KR.md)(최근 작업일지)
 
 ## GitHub 이슈 번호 대조
 
@@ -29,9 +29,11 @@
 | #10 | — | 로그가 루트에 쌓임 (해결, 등록 안 함) |
 | #11 | [#9] | PowerShell 한글 인코딩 |
 | #12 | [#10] | 상대궤도 오프셋 오판 |
+| #13 | (등록 대기) | external DEM 범위 혼재 |
+| #14 | (등록 대기) | PowerShell `-File` 인자·`Wait-Process` 한도 |
 
-> ⚠️ **GitHub #6은 #8의 중복이다.** 제목을 정정하면서 문구가 바뀌어(“2배 차이”
-> 삭제) 중복 검사가 빗나갔다. #6을 닫고 #8을 남긴다. 재발 방지로
+> ✅ **GitHub #6은 #8의 중복이라 닫았다**(2026-08-14). 제목을 정정하면서 문구가
+> 바뀌어(“2배 차이” 삭제) 중복 검사가 빗나갔다. 재발 방지로
 > [create_issues.ps1](../../scripts/create_issues.ps1)이 이제 **본문 파일 →
 > 이슈 번호 매핑**(`data/github_issues.json`)으로 중복을 거른다 — 제목을 고쳐도
 > 같은 이슈로 인식한다.
@@ -238,3 +240,59 @@ conda run -n s1_snappy python -m s1.tools.preprocess.batch_grd_rtc_frost --month
 **조치** — [create_issues.ps1](../../scripts/create_issues.ps1)을
 `gh api --input <UTF-8 JSON>` 방식으로 재작성해 **한글이 인자로 가지 않게** 했다.
 콘솔 인코딩도 스크립트 앞에서 UTF-8로 고정한다.
+
+## #13 🟡 external DEM 범위가 산출물마다 달랐다
+
+### 증상
+
+`--dem` 옵션 도입(2026-08-10) 이후의 VH 산출물이 **서로 다른 external DEM**으로
+구워져 있었다. 로그를 대조해 확인한 8월분:
+
+| DEM | 처리된 씬 | 범위 | 제주 |
+| --- | --- | --- | --- |
+| `korea_full_cop30.tif` | D0A4·E160·3EEB(25-08-06), 9A11·C40B(25-08-12), 3B05·B10F(26-08-02) | 125.0~131.0E, 32.9~39.9N | ✅ |
+| `korea_cop30.tif` | 2B35·9FBB·9F4F(25-08-11), EF16·FC19(26-08-07) | 125.4~129.9E, **33.8**~38.7N | ❌ |
+| `han_cop30.tif` | 17B9(26-08-02) | 125.7~129.9E, 35.6~39.2N | ❌ 부산·목포도 빠짐 |
+
+**DEM 밖 영역은 RTC 산출물에서 무효(결측)로 남는다.** 유역 단위 작업에는 유역
+clip DEM이 빠르고 합리적이지만, 그 산출물을 **남한 전역 비교에 섞어 쓰면**
+어떤 씬은 제주가 없고 어떤 씬은 있는 상태가 된다. 면적 비교가 조용히 깨진다.
+
+**조치** — 남한 전역 비교용 산출물은 **`korea_full_cop30.tif` 하나로 통일**한다
+(2026-08-14 결정). 이것만 남한 전역 + 제주 + 울릉을 덮는다. 재처리 도구는
+[rebake_vh_extdem.ps1](../../scripts/rebake_vh_extdem.ps1) — 배치 러너가
+산출물이 있으면 건너뛰므로 **삭제 후 재실행**한다.
+
+**남은 것** — 산출물에 어떤 DEM을 썼는지 파일 자체에 기록이 없다. 지금은
+실행 로그(`temp/logs/*.log`의 `DEM:` 줄)를 뒤져야 안다. GeoTIFF 메타데이터나
+사이드카에 DEM 이름을 남기는 것을 검토할 것.
+
+## #14 🟢 PowerShell `-File` 인자와 `Wait-Process` 한도
+
+### 증상 1 — `-File`로 부르면 배열 파라미터가 깨진다
+
+```text
+Cannot convert value "32368,7312,31800,8216" to type "System.Int32[]"
+```
+
+`powershell -File script.ps1 -WaitFor 32368,7312`처럼 부르면 인자가 **전부
+문자열**로 넘어온다. `[int[]]` 파라미터는 쉼표 문자열을 배열로 변환하지 못한다.
+(`-Command`로 부르면 PowerShell이 파싱하므로 동작한다 — 호출 방식에 따라
+결과가 달라져 헷갈린다.)
+
+**조치** — 스크립트 파라미터를 `[string]`으로 받고 내부에서 `.Split(",")` 한다.
+
+### 증상 2 — `Wait-Process -Timeout`은 9시간을 못 넘긴다
+
+```text
+The 86400 argument is greater than the maximum allowed range of 32767
+```
+
+`-Timeout`은 초 단위 `Int16` 범위(최대 32767초 ≈ 9.1시간)다. RTC 배치는
+하루를 넘기기도 한다.
+
+**조치** — 폴링 루프로 대기한다.
+
+```powershell
+while (Get-Process -Id $procId -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 60 }
+```
