@@ -59,7 +59,10 @@ $issues = @(
        labels = @("analysis", "blocked") },
     @{ file = "09_wet_soil_overestimation.md"
        title = "26년 7/14 두 궤도가 젖은 토양으로 과대추정 (+39% / +17%)"
-       labels = @("analysis", "data-quality") }
+       labels = @("analysis", "data-quality") },
+    @{ file = "12_relative_orbit_offset.md"
+       title = "절대궤도 175배수 산술로 상대궤도를 판단해 25/26년 짝을 잘못 지음 (S1C 오프셋 변경)"
+       labels = @("data-quality", "analysis") }
 )
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
