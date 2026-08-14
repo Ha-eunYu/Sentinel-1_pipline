@@ -86,12 +86,24 @@ if (-not $gh) {
     throw "GitHub CLI(gh)가 없습니다. 'winget install --id GitHub.cli' 후 'gh auth login'."
 }
 
-# 이미 있는 제목 목록 (중복 등록 방지)
+# --- 중복 방지 -------------------------------------------------------------
+# 1차: 본문 파일 -> 이슈 번호 매핑(data/github_issues.json). 제목을 고쳐도
+#      같은 이슈로 인식한다. 실제로 제목만 다듬었다가 #6/#8 중복을 만든 적이 있다.
+# 2차: 그래도 없으면 제목 일치로 한 번 더 거른다.
+$mapPath = Join-Path $root "data/github_issues.json"
+$map = @{}
+if (Test-Path $mapPath) {
+    $obj = Get-Content $mapPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($p in $obj.PSObject.Properties) {
+        if ($p.Name -notlike "_*") { $map[$p.Name] = $p.Value }
+    }
+}
+
 $existing = @()
 try {
     $json = & $gh api "repos/$Repo/issues?state=all&per_page=100" 2>$null | Out-String
     if ($json) { $existing = ($json | ConvertFrom-Json).title }
-} catch { Write-Warning "기존 이슈 목록을 못 읽었습니다(중복 검사 생략): $_" }
+} catch { Write-Warning "기존 이슈 목록을 못 읽었습니다(제목 검사 생략): $_" }
 
 $payloadDir = Join-Path $root "temp/issue_payloads"
 if (-not (Test-Path $payloadDir)) { New-Item -ItemType Directory -Path $payloadDir | Out-Null }
@@ -99,7 +111,11 @@ if (-not (Test-Path $payloadDir)) { New-Item -ItemType Directory -Path $payloadD
 foreach ($i in $issues) {
     $bodyPath = Join-Path $root "temp/issues/$($i.file)"
     if (-not (Test-Path $bodyPath)) { Write-Warning "본문 없음: $bodyPath"; continue }
-    if ($existing -contains $i.title) { "건너뜀(이미 있음): $($i.title)"; continue }
+    if ($map.ContainsKey($i.file)) {
+        "건너뜀(#$($map[$i.file]) 로 등록됨): $($i.file)"
+        continue
+    }
+    if ($existing -contains $i.title) { "건너뜀(같은 제목 존재): $($i.title)"; continue }
 
     # 제목·본문·라벨을 UTF-8 JSON으로 (위 규약 2 — 한글이 인자로 가지 않는다)
     $payload = @{
@@ -119,4 +135,14 @@ foreach ($i in $issues) {
     $res = & $gh api --method POST "repos/$Repo/issues" --input $payloadPath | Out-String
     $num = ($res | ConvertFrom-Json).number
     "등록 #$num  $($i.title)"
+
+    # 매핑을 즉시 저장한다(중간에 끊겨도 다음 실행이 중복을 만들지 않게).
+    $map[$i.file] = $num
+    $out = [ordered]@{
+        "_comment" = "본문 파일 -> GitHub 이슈 번호 매핑. create_issues.ps1 이 읽고 쓴다."
+        "_repo"    = $Repo
+    }
+    foreach ($k in ($map.Keys | Sort-Object)) { $out[$k] = $map[$k] }
+    [System.IO.File]::WriteAllText($mapPath, ($out | ConvertTo-Json -Depth 3),
+        (New-Object System.Text.UTF8Encoding($false)))
 }

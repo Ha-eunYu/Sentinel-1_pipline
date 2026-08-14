@@ -10,6 +10,32 @@
 관련: [TODO_KR.md](TODO_KR.md)(할 일) · [PROGRESS_KR.md](PROGRESS_KR.md)(진행상황) ·
 [WORKLOG_20260813_KR.md](WORKLOG_20260813_KR.md)(최근 작업일지)
 
+## GitHub 이슈 번호 대조
+
+**이 문서의 번호와 GitHub 이슈 번호는 다르다.** 헷갈리지 않도록 대조표를 둔다
+(등록 2026-08-14, 매핑 원본은 `data/github_issues.json`).
+
+| 이 문서 | GitHub | 제목 |
+| --- | --- | --- |
+| #1 | [#1] | SNAP external DEM에 VRT |
+| #2 | [#2] | COP30 하구 결측 |
+| #3 | — | EGM 이중 적용 (해결, 등록 안 함) |
+| #4 | [#3] | PowerShell stderr 오탐 |
+| #5 | — | 궤도번호 앞 0 유실 (해결, 등록 안 함) |
+| #6 | [#4] | GDAL_DATA 경고 |
+| #7 | [#5] | South_Korea.geojson 해안·도서 제외 |
+| #8 | [#8] | 연도 간 관측 범위 차이 |
+| #9 | [#7] | 7/14 젖은 토양 과대추정 |
+| #10 | — | 로그가 루트에 쌓임 (해결, 등록 안 함) |
+| #11 | [#9] | PowerShell 한글 인코딩 |
+| #12 | [#10] | 상대궤도 오프셋 오판 |
+
+> ⚠️ **GitHub #6은 #8의 중복이다.** 제목을 정정하면서 문구가 바뀌어(“2배 차이”
+> 삭제) 중복 검사가 빗나갔다. #6을 닫고 #8을 남긴다. 재발 방지로
+> [create_issues.ps1](../../scripts/create_issues.ps1)이 이제 **본문 파일 →
+> 이슈 번호 매핑**(`data/github_issues.json`)으로 중복을 거른다 — 제목을 고쳐도
+> 같은 이슈로 인식한다.
+
 ---
 
 ## #1 🟡 SNAP external DEM에 VRT를 주면 읽지 못한다
