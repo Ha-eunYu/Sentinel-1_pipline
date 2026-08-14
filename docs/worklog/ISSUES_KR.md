@@ -187,5 +187,28 @@ conda run -n s1_snappy python -m s1.tools.preprocess.batch_grd_rtc_frost --month
 > $e.Count   # 0 이어야 정상
 > ```
 
-같은 이유로 PowerShell로 파일을 쓸 때 `Set-Content`/`Add-Content`는 기본이
-시스템 ANSI다. 다른 도구가 읽을 파일은 `-Encoding utf8`을 명시할 것.
+### 증상 2 — 한글을 네이티브 명령 인자로 넘기면 깨진다
+
+`gh issue create --title "한글 제목"` 처럼 넘기면 PS 5.1이 네이티브 명령 인자를
+**콘솔 코드페이지로 인코딩**해 전달한다. UTF-8을 기대하는 프로그램(gh·git·curl)
+에서 글자가 깨진다. 본문 파일은 UTF-8이라 멀쩡한데 **제목만 깨지는** 형태로
+나타나 원인을 찾기 어렵다.
+
+### 규약 (한글이 든 스크립트를 쓸 때마다 확인)
+
+1. **`.ps1`은 UTF-8 with BOM.** 편집기가 BOM을 떨굴 수 있으니 수정 후 파서로 검사.
+2. **한글을 네이티브 명령 인자로 넘기지 않는다 — 파일로 넘긴다.**
+   - GitHub: `gh api --method POST repos/O/R/issues --input payload.json`
+     (제목·본문·라벨을 UTF-8 JSON에. **JSON에는 BOM 금지** — 서버 파싱 실패)
+   - git: `git commit -F message.txt`
+   - 부득이하면 스크립트 앞에서 콘솔을 UTF-8로 고정:
+     `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` + `chcp 65001`
+3. **PowerShell로 파일 쓸 때** `Set-Content`/`Add-Content`는 기본이 시스템 ANSI다.
+   다른 도구가 읽을 파일은 `-Encoding utf8`을 명시하거나
+   `[System.IO.File]::WriteAllText(path, text, New-Object System.Text.UTF8Encoding($false))`
+   로 BOM 유무까지 지정한다.
+4. **파이썬으로 `.ps1`을 생성·수정하면** `encoding="utf-8-sig"`로 쓴다(BOM 포함).
+
+**조치** — [create_issues.ps1](../../scripts/create_issues.ps1)을
+`gh api --input <UTF-8 JSON>` 방식으로 재작성해 **한글이 인자로 가지 않게** 했다.
+콘솔 인코딩도 스크립트 앞에서 UTF-8로 고정한다.

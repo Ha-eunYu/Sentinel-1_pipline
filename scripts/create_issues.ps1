@@ -3,18 +3,23 @@
   docs/worklog/ISSUES_KR.md 의 미해결 이슈를 GitHub 이슈로 등록한다.
 
 .DESCRIPTION
-  본문은 temp/issues/*.md 에 미리 써 둔 것을 쓴다. 라벨이 없으면 만든 뒤
-  붙인다. 이미 같은 제목의 열린 이슈가 있으면 건너뛴다(중복 등록 방지).
+  본문은 temp/issues/*.md 에 미리 써 둔 것을 쓴다. 이미 같은 제목의 이슈가
+  있으면 건너뛴다(중복 등록 방지).
+
+  ⚠ 한글 인코딩 규약 (ISSUES_KR #11)
+  1. 이 파일은 **UTF-8 with BOM**으로 저장한다. BOM이 없으면 Windows
+     PowerShell 5.1이 시스템 ANSI(CP949)로 읽어 한글이 깨지고 파서가 죽는다.
+  2. **한글을 네이티브 명령의 인자로 넘기지 않는다.** PS 5.1은 네이티브 인자를
+     콘솔 코드페이지로 인코딩해 넘기므로 gh 로 가는 도중 한글이 깨진다.
+     그래서 제목·본문·라벨을 **UTF-8 JSON 파일**로 쓰고
+     `gh api --input <파일>` 로 넘긴다. 인자에는 ASCII만 남는다.
+  3. 콘솔 입출력도 UTF-8로 맞춰 gh 응답(한글 제목)이 깨지지 않게 한다.
 
   전제: GitHub CLI 설치 + 인증
       winget install --id GitHub.cli
-      gh auth login          # 저장소 접근 권한 필요 (private repo)
+      gh auth login
       # 또는 저장소 1개짜리 fine-grained PAT (Issues: Read and write):
       #   $env:GH_TOKEN = "github_pat_..."
-
-  ⚠ 이 파일은 반드시 **UTF-8 with BOM**으로 저장할 것. Windows PowerShell 5.1은
-     BOM이 없으면 .ps1 을 시스템 ANSI(CP949)로 읽어 한글이 깨지고, 따옴표 짝이
-     무너져 파서 오류가 난다.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts/create_issues.ps1 -DryRun
@@ -28,14 +33,13 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
-# 라벨: 없으면 만든다. (색은 GitHub 기본 팔레트에서 임의 선택)
-$labels = @{
-    "snap"        = @{ color = "1d76db"; desc = "SNAP/gpt 전처리 관련" }
-    "data-quality"= @{ color = "d93f0b"; desc = "입력 자료·경계·판정 품질" }
-    "analysis"    = @{ color = "0e8a16"; desc = "수체·가뭄 분석 방법론" }
-    "tooling"     = @{ color = "fbca04"; desc = "실행 환경·자동화" }
-    "blocked"     = @{ color = "b60205"; desc = "선행 작업이 끝나야 진행 가능" }
-}
+# --- 인코딩 고정 (위 규약 3) -------------------------------------------------
+try {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    [Console]::InputEncoding = [System.Text.Encoding]::UTF8
+    $OutputEncoding = [System.Text.Encoding]::UTF8
+    chcp 65001 > $null
+} catch { Write-Warning "콘솔 인코딩을 UTF-8로 바꾸지 못했습니다: $_" }
 
 # (본문 파일, 제목, 라벨들)
 $issues = @(
@@ -55,44 +59,64 @@ $issues = @(
        title = "South_Korea.geojson이 부산·강릉·여수·해남·완도·제주를 제외 — 궤도 선별 재검증 필요"
        labels = @("data-quality") },
     @{ file = "08_common_footprint_mask.md"
-       title = "연도 간 관측 범위 2배 차이 — 공통 footprint 마스크 없이는 면적 비교 불가"
+       title = "연도 간 관측 범위 차이 — 공통 footprint 마스크 없이는 면적 비교 불가"
        labels = @("analysis", "blocked") },
     @{ file = "09_wet_soil_overestimation.md"
        title = "26년 7/14 두 궤도가 젖은 토양으로 과대추정 (+39% / +17%)"
        labels = @("analysis", "data-quality") },
+    @{ file = "11_powershell_korean_encoding.md"
+       title = "PowerShell 한글 인코딩 — .ps1 BOM과 네이티브 인자 코드페이지"
+       labels = @("tooling") },
     @{ file = "12_relative_orbit_offset.md"
        title = "절대궤도 175배수 산술로 상대궤도를 판단해 25/26년 짝을 잘못 지음 (S1C 오프셋 변경)"
        labels = @("data-quality", "analysis") }
 )
 
-if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+# gh 찾기. 설치 직후 열려 있던 셸은 PATH가 갱신되지 않아 Get-Command 로는 못
+# 찾는다. 표준 설치 경로도 함께 뒤진다.
+$gh = (Get-Command gh -ErrorAction SilentlyContinue).Source
+if (-not $gh) {
+    $gh = @(
+        "$env:ProgramFiles\GitHub CLI\gh.exe",
+        "${env:ProgramFiles(x86)}\GitHub CLI\gh.exe",
+        "$env:LOCALAPPDATA\Programs\GitHub CLI\gh.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $gh) {
     throw "GitHub CLI(gh)가 없습니다. 'winget install --id GitHub.cli' 후 'gh auth login'."
 }
 
-if (-not $DryRun) {
-    foreach ($name in $labels.Keys) {
-        $l = $labels[$name]
-        gh label create $name --repo $Repo --color $l.color --description $l.desc 2>$null
-    }
-}
-
+# 이미 있는 제목 목록 (중복 등록 방지)
 $existing = @()
 try {
-    $existing = (gh issue list --repo $Repo --state all --limit 200 --json title |
-                 ConvertFrom-Json).title
-} catch { }
+    $json = & $gh api "repos/$Repo/issues?state=all&per_page=100" 2>$null | Out-String
+    if ($json) { $existing = ($json | ConvertFrom-Json).title }
+} catch { Write-Warning "기존 이슈 목록을 못 읽었습니다(중복 검사 생략): $_" }
+
+$payloadDir = Join-Path $root "temp/issue_payloads"
+if (-not (Test-Path $payloadDir)) { New-Item -ItemType Directory -Path $payloadDir | Out-Null }
 
 foreach ($i in $issues) {
-    $body = Join-Path $root "temp/issues/$($i.file)"
-    if (-not (Test-Path $body)) { Write-Warning "본문 없음: $body"; continue }
+    $bodyPath = Join-Path $root "temp/issues/$($i.file)"
+    if (-not (Test-Path $bodyPath)) { Write-Warning "본문 없음: $bodyPath"; continue }
     if ($existing -contains $i.title) { "건너뜀(이미 있음): $($i.title)"; continue }
+
+    # 제목·본문·라벨을 UTF-8 JSON으로 (위 규약 2 — 한글이 인자로 가지 않는다)
+    $payload = @{
+        title  = $i.title
+        body   = [System.IO.File]::ReadAllText($bodyPath, [System.Text.Encoding]::UTF8)
+        labels = $i.labels
+    } | ConvertTo-Json -Depth 5
+    $payloadPath = Join-Path $payloadDir ($i.file -replace '\.md$', '.json')
+    # BOM 없는 UTF-8 — JSON에 BOM이 붙으면 서버가 파싱에 실패한다.
+    [System.IO.File]::WriteAllText($payloadPath, $payload,
+        (New-Object System.Text.UTF8Encoding($false)))
 
     if ($DryRun) {
         "[dry-run] $($i.title)  [$($i.labels -join ', ')]  <- temp/issues/$($i.file)"
         continue
     }
-    # $args 는 PowerShell 자동 변수라 덮어쓰지 않는다.
-    $ghArgs = @("issue", "create", "--repo", $Repo, "--title", $i.title, "--body-file", $body)
-    foreach ($lb in $i.labels) { $ghArgs += @("--label", $lb) }
-    & gh @ghArgs
+    $res = & $gh api --method POST "repos/$Repo/issues" --input $payloadPath | Out-String
+    $num = ($res | ConvertFrom-Json).number
+    "등록 #$num  $($i.title)"
 }
