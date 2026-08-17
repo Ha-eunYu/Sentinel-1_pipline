@@ -86,3 +86,7 @@ _chain*.ps1
 # 별도 분석 작업공간(3.9GB: QGIS 프로젝트·보고서·NAS 사본 등). 코드가 아니라
 # 데이터·문서 더미라 저장소에 넣지 않는다.
 20260709_flood/
+
+# 실험·벤치마크 산출물(래스터). README 만 추적한다 — experiments/README_KR.md
+experiments/*
+!experiments/README_KR.md

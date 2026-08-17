@@ -7,6 +7,25 @@
 
 ---
 
+## 결정 이력 (2026-08-17 갱신)
+
+이 문서는 **왜 Frost를 쓰는가**의 근거다. 결론이 어떻게 반영됐는지 먼저 적는다.
+
+| 시점 | 결정·조치 |
+| --- | --- |
+| 2026-07-23 | 실험 결과에 따라 `prepro_grd_gpt.py` 기본 speckle 필터를 **Refined Lee → Frost**로 변경 |
+| 2026-07-30 | 26년 7월 VV RTC를 Frost로 재처리(필터 혼재 해소) |
+| 2026-08-14~17 | **25·26년 7·8월 VH + external DEM RTC 72씬을 전부 Frost로 통일** — 현행 정본 `downloads/rtc_grd_frost_vh/` |
+
+**한 줄 근거**: Frost는 Refined Lee와 speckle 억제(ENL)가 비슷하면서 **가는
+수로·경계 보존이 낫다.** 수체 판별은 가는 수로가 살아 있어야 하므로 Frost를
+쓴다. Refined Lee의 가는 선 보존은 42~48%로 셋 중 가장 나빴다(2절).
+
+> ⚠️ **이 실험의 원본 래스터는 남아 있지 않다.** 비교에 쓴 `downloads/rtc_grd/`의
+> 필터별 산출물은 2026-08-17 VV RTC 정리 때 삭제됐다. 재현하려면 원본 zip으로
+> `--speckle` 옵션을 바꿔가며 다시 처리해야 한다. **수치와 결론은 이 문서에
+> 남아 있다.**
+
 ## 0. 한눈에 (TL;DR)
 
 1. **SNAP 필터 4종**: multilook-only(필터 없음) 대비 Refined Lee/Lee/Frost는 speckle
@@ -234,9 +253,10 @@ median) + 공통 인프라 + SNAP 필터 참조문헌 카탈로그로 구성.
 
 1. **SNAP 파이프라인 필터**: 홍수/수체 매핑에서 가는 수로 보존이 중요하면 현재 기본값
    **Refined Lee → Frost 전환 검토**(speckle 억제 동등, 가는 선·경계 보존 우수).
-   → **2026-07-23 적용됨**: `prepro_grd_gpt.py` 기본 `speckle_filter_name`을 Frost로
-   변경. 단 기존 RTC 65개는 Refined Lee라 필터 혼재 — 일관성 필요 시 전 씬 재처리
-   권장([GTC_RTC_PROCESSING_LOG_KR.md](GTC_RTC_PROCESSING_LOG_KR.md) 1절 주의).
+   → **2026-07-23 적용, 2026-08-17 완결**: `prepro_grd_gpt.py` 기본
+   `speckle_filter_name`을 Frost로 바꿨고, 25·26년 7·8월 VH external DEM RTC
+   72씬을 전부 Frost로 통일해 **필터 혼재가 해소됐다**(현행 정본
+   `downloads/rtc_grd_frost_vh/`).
 2. **필터 파라미터**: speckle을 더 세게 잡고 싶으면 필터 종류보다 **윈도우를 키우는 것
    (3×3→5×5→7×7)** 이 직접적이다. 단 경계·선 보존과 트레이드오프.
 3. **`filtering` 폴더**는 SNAP을 잘 재현한 검증된 순수 파이썬 구현이라, SNAP 없이(예:
@@ -288,7 +308,9 @@ apply_speckle_filter("scene_linear.tif", "scene_rl.tif",
 
 ### 부록 — 산출물 위치
 
-- SNAP 필터별 RTC: `downloads/rtc_grd/S1C_..._1A5A_COG_rtc_db{,_lee,_frost,_nofilter}.tif`
+- SNAP 필터별 RTC: ~~`downloads/rtc_grd/S1C_..._1A5A_COG_rtc_db{,_lee,_frost,_nofilter}.tif`~~
+  → **2026-08-17 삭제됨**(VV RTC 정리). 재현하려면 원본 zip으로 필터를 바꿔가며
+  다시 처리해야 한다. 수치·결론은 이 문서에 남아 있다.
 - 비교 crop: 동쪽 육지+수체 혼합부 (col 32000, row 6000 / 12000, 1000×1000)
 - 비교 스크립트: 세션 스크래치패드 `filter_qa_compare.py` (dB→linear 변환 + `qa.metrics`
   + `filtering.make_filter_fn` 호출). 정식 편입 시 저장소로 옮길 수 있음.
