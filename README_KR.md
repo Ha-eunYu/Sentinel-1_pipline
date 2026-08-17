@@ -435,6 +435,8 @@ D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 
 
 ## 관련 문서
 
+- [DOWNLOADS_LAYOUT_KR.md](docs/pipeline/DOWNLOADS_LAYOUT_KR.md) — **downloads/ 폴더 지도**:
+  어느 폴더가 정본이고 무엇이 실험·대조군인지, 삭제 이력과 정리 규칙
 - [RELATIVE_ORBITS_KR.md](docs/pipeline/RELATIVE_ORBITS_KR.md) — **상대궤도 인벤토리**
   (22~26년 7·8월): 위성별 오프셋, 연도 간 비교 짝, 제주 커버 궤도, 장기 설계
 - [ISSUES_KR.md](docs/worklog/ISSUES_KR.md) — **이슈 트래킹**: SNAP external DEM(VRT 불가·
