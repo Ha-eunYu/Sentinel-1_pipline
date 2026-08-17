@@ -109,7 +109,8 @@ def extract_s1_summary(item) -> S1ItemSummary:
         assets=sorted(list(assets.keys())),
         product_href=product_href,
         product_id=product_id,
-        zipper_url=zipper_url,   
+        zipper_url=zipper_url,
+        geometry=getattr(item, "geometry", None),
     )
 
 

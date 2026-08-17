@@ -41,7 +41,10 @@ class S1ItemSummary:
     assets: List[str]
     product_href: Optional[str] = None
     product_id: Optional[str] = None
-    zipper_url: Optional[str] = None  
+    zipper_url: Optional[str] = None
+    # 실제 촬영 footprint(GeoJSON). bbox는 기울어진 스와스를 감싸는 사각형이라
+    # 안 찍은 삼각형 여백까지 포함한다 — 남한/북한 판정은 이쪽으로 해야 한다.
+    geometry: Optional[Dict[str, Any]] = None  
 
 def to_dt_utc(s: str) -> datetime:
     if s.endswith("Z"):

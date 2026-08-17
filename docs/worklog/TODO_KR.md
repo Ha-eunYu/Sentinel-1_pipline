@@ -172,6 +172,20 @@ CDSE 관측 목록(`data/relative_orbits_sentinel-1-grd.csv`, 22~26년 7·8월 �
 - [ ] 조사 자체를 도구로 고정 — 지금은 임시 스크립트다.
       `s1/tools/audit/` 에 `vh_coverage_report.py` 로 넣을 것.
 
+## P0.5b — DEM 확정과 북부 결측 확인 (2026-08-18)
+
+전처리 규격을 [PREPROCESSING_SPEC_KR.md](../pipeline/PREPROCESSING_SPEC_KR.md)로
+확정했다. **한반도 전체를 덮는 DEM은 `korea_peninsula_cop30.tif` 하나뿐이다**
+(123.5~131.3E, 32.8~43.3N, 1.6 GB).
+
+- [ ] **기존 79씬의 북부 결측 확인** — 전부 `korea_full_cop30.tif`(북위 39.9°
+      까지)로 구웠다. 프레임이 39.9° 이북(북한 북부)에 걸친 씬은 그 구간이
+      결측이다. 남한·제주는 문제없다.
+- [ ] 결측이 확인된 씬은 `korea_peninsula_cop30.tif`로 재처리
+      (`scripts/rebake_vh_extdem.ps1`)
+- [ ] **앞으로 처리하는 83씬은 처음부터 `korea_peninsula_cop30.tif`** 를 쓴다
+- [ ] 산출물에 사용 DEM 을 기록하는 방법 검토(현재는 로그를 뒤져야 안다)
+
 ## P0.5 — 8월 가뭄 비교쌍 (9/8 보고용)
 
 배경·상세: [WORKLOG_20260807_KR.md](WORKLOG_20260807_KR.md)(최초 6개 유역) ·
