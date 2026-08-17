@@ -26,6 +26,48 @@
 > `--speckle` 옵션을 바꿔가며 다시 처리해야 한다. **수치와 결론은 이 문서에
 > 남아 있다.**
 
+## VH 재검증 (2026-08-17)
+
+**아래 본문의 실험은 전부 VV로 한 것이다.** VH는 물/육지 대비가 다르고 절대값도
+약 6 dB 낮아 결론이 그대로 성립하는지 확인이 필요했다. 같은 씬
+(26-07-20 `F314`, rel 134)을 **VH·external DEM·동일 조건**으로 필터만 바꿔
+4종 처리해 다시 쟀다.
+
+| 필터 | ENL | 가는선 보존% | 경계 보존% |
+| --- | ---: | ---: | ---: |
+| **Frost** | 3.40 | **67.1** | **69.6** |
+| Lee | 4.45 | 64.2 | 45.3 |
+| Refined Lee | **8.33** | 49.4 | 20.0 |
+| (무필터) | 1.78 | 100.0 | 100.0 |
+
+**결론은 VV와 같다 — 수체 판별에는 Frost다.**
+
+- Refined Lee가 speckle은 가장 잘 잡지만(ENL 8.33, Frost의 2.4배) **가는 선을
+  절반 가까이(49.4%), 경계를 80% 날린다**(보존 20.0%). 소하천이 사라지면 수체
+  면적이 그만큼 줄고, 경계가 뭉개지면 임계값이 흔들린다.
+- Frost는 ENL을 무필터의 1.9배로 올리면서 가는 선·경계를 가장 많이 남긴다.
+- VV 실험에서 Refined Lee의 가는 선 보존이 42~48%였는데, **VH에서도 49.4%로
+  같은 약점**이 재현됐다.
+
+> **VH는 VV보다 speckle이 심하다.** 무필터 ENL이 VV 5.2 → VH 1.78이다. 같은
+> 필터를 걸어도 VH의 ENL이 낮게 나오는 것은 이 때문이지, 필터가 덜 듣는 게 아니다.
+
+**한계** — 씬 1장·crop 1곳(1024px)의 결과다. 필터 간 **순위**는 VV 실험과
+일치해 신뢰할 만하지만, 절대 수치를 인용할 때는 표본 크기를 함께 밝힐 것.
+
+> ⚠️ `qa.metrics.fisher_separability`가 이 자료에서 음수(−23.7 ~ −24.7)를
+> 돌려준다. 필터 간 차이도 1 미만이라 **수면 분리도 축은 이번 비교에서 판단
+> 근거로 쓰지 않았다.** 지표 정의를 확인한 뒤 다시 볼 것.
+
+재현:
+
+```bash
+conda run -n s1_snappy python -m s1.tools.audit.filter_experiment \
+    --zip downloads/sentinel1_grd/<씬>.zip --pol VH
+conda run -n s1_snappy python -m s1.tools.audit.filter_qa_compare \
+    --dir experiments/vh_filter
+```
+
 ## 0. 한눈에 (TL;DR)
 
 1. **SNAP 필터 4종**: multilook-only(필터 없음) 대비 Refined Lee/Lee/Frost는 speckle
