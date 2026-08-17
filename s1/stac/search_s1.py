@@ -20,7 +20,7 @@ from s1.stac.models import (
 # 분리했다(SCENE_FOOTPRINT_REAUDIT_KR.md와 동일한 검증 방법).
 # bbox 대신 footprint로 촬영 지역을 판정하는 로직은 footprint 패키지에 통합돼
 # 있다(footprint/FOOTPRINT_AOI_KR.md 참조). 여기서는 STAC item용 얇은 어댑터만 둔다.
-from s1.footprint import footprint_intersects
+from s1.footprint import footprint_intersects, footprint_overlap_ratio
 
 
 def touches_korea(item) -> bool:
@@ -149,6 +149,7 @@ def list_s1_items_for_date(
     target_date: str,
     cfg: S1SearchConfig,
     exclude_non_korea: bool = True,
+    min_overlap_pct: float = 0.0,
     ) -> Dict[str, Any]:
     """지정 날짜(target_date) 주변(±cfg.window_days)에서 검색한 뒤, **지정 날짜에
     가까운 촬영일 순**으로 정렬한 후보 전체를 반환한다. 몇 개를 실제로 받을지는
@@ -189,16 +190,28 @@ def list_s1_items_for_date(
     n_before_korea_filter = len(items)
     excluded_ids: list[str] = []
     if exclude_non_korea:
+        # min_overlap_pct: 프레임 면적 대비 한반도 교집합이 이 비율 미만이면 제외.
+        # 0 이면 예전 동작(교집합이 조금이라도 있으면 통과)이다. 검색 상자를
+        # 한반도 전체로 넓히면 중국·일본 위주 프레임이 모서리만 스치고 통과하므로,
+        # 1% 정도를 주어 확실히 걸러낸다(2026-08-17).
         kept = []
         for it in items:
-            if touches_korea(it):
-                kept.append(it)
-            else:
+            geom = getattr(it, "geometry", None)
+            if not touches_korea(it):
                 excluded_ids.append(it.id)
+                continue
+            if min_overlap_pct > 0 and geom:
+                pct = footprint_overlap_ratio(geom) * 100
+                if pct < min_overlap_pct:
+                    excluded_ids.append(f"{it.id}({pct:.1f}%)")
+                    continue
+            kept.append(it)
         items = kept
         if excluded_ids:
-            print(f"  [footprint 제외] 한반도 교집합 0%(중국/일본 등) {len(excluded_ids)}개: "
-                  f"{', '.join(excluded_ids)}")
+            print(f"  [footprint 제외] 한반도 교집합 {min_overlap_pct}% 미만"
+                  f"(중국/일본 등) {len(excluded_ids)}개: "
+                  f"{', '.join(excluded_ids[:5])}"
+                  + (" ..." if len(excluded_ids) > 5 else ""))
 
     if not items:
         return {

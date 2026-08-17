@@ -85,7 +85,9 @@ def search_with_backoff(day: str, tries: int = 5):
 
     for attempt in range(tries):
         try:
-            return list_s1_items_for_date(client, day, cfg)
+            # 중국·일본 프레임을 확실히 뺀다. 검색 상자를 한반도로 넓혔기 때문에
+            # 모서리만 스치는 프레임이 들어온다 — 교집합 1% 미만은 제외한다.
+            return list_s1_items_for_date(client, day, cfg, min_overlap_pct=1.0)
         except Exception as e:  # noqa: BLE001
             if "429" not in str(e) and "Rate limit" not in str(e):
                 raise
