@@ -75,12 +75,33 @@ cfg = S1SearchConfig(bbox=BBOX, intersects_geojson=None,
                      max_items=300, instrument_mode="IW",
                      orbit_state=None, product_type=None, polarization=None)
 
+def search_with_backoff(day: str, tries: int = 5):
+    """CDSE STAC 은 연속 조회에 429(WAF rate limit)를 낸다. 지수 백오프로 재시도.
+
+    여러 달을 한 번에 훑으면 반드시 걸린다(2026-08-17). 실패를 그냥 넘기면
+    그 날짜 관측이 통째로 빠지므로, 마지막 시도까지 실패하면 예외를 올린다.
+    """
+    import time
+
+    for attempt in range(tries):
+        try:
+            return list_s1_items_for_date(client, day, cfg)
+        except Exception as e:  # noqa: BLE001
+            if "429" not in str(e) and "Rate limit" not in str(e):
+                raise
+            wait = 30 * (2 ** attempt)          # 30s, 60s, 120s, 240s, 480s
+            print(f"  [rate limit] {day} — {wait}초 후 재시도 "
+                  f"({attempt + 1}/{tries})")
+            time.sleep(wait)
+    raise RuntimeError(f"{day}: rate limit 로 {tries}회 실패")
+
+
 seen: dict[str, dict] = {}
 for mon in MONTHS:
     y, m = int(mon[:4]), int(mon[4:])
     d = date(y, m, 1)
     while d.month == m:
-        r = list_s1_items_for_date(client, d.isoformat(), cfg)
+        r = search_with_backoff(d.isoformat())
         if r.get("status") == "ok":
             for c in r.get("candidates", []):
                 if str(c.get("datetime", ""))[:7].replace("-", "") == mon:
