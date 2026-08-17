@@ -7,9 +7,31 @@
 
 | 폴더 | 용량 | 내용 |
 | --- | ---: | --- |
-| `sentinel1_grd/` | 180 GB | **원본 GRD zip**. 모든 재처리의 입력 |
-| `sentinel1/` | 102 GB | 원본 SLC zip (D:로 이동 후 junction) |
-| `sentinel1_slc_202507/` | 17 GB | 25년 7월 SLC 4장 (간섭 분석용, 별도 수집) |
+| `sentinel1_grd/` 🔗 | 180 GB | **원본 GRD zip**. 모든 재처리의 입력. **junction → `E:\06_SAR_system_archive\sentinel1_grd`** |
+| `sentinel1/` 🔗 | 102 GB | 원본 SLC zip. **junction → `D:\06_SAR_system_archive\sentinel1`** |
+| `sentinel1_slc_202507/` | 17 GB | 25년 7월 SLC 4장 (간섭 분석용, 별도 수집). F: 실물 |
+
+### 🔗 junction 주의
+
+두 원본 폴더는 **다른 드라이브를 가리키는 junction**이다(2026-08-17 실측).
+탐색기·스크립트에서는 `downloads/` 안에 있는 것처럼 보이지만 실제 데이터는
+D:·E:에 있다. F: 용량을 확보하면서 스크립트 경로는 그대로 두려고 이렇게 했다.
+
+```powershell
+Get-ChildItem downloads -Directory | ForEach-Object {
+    $i = Get-Item $_.FullName
+    if ($i.LinkType) { "$($_.Name) -> $($i.Target)" }
+}
+```
+
+- **junction 안의 파일을 지우면 D:·E:의 실물이 지워진다.** `downloads/` 안이라고
+  가볍게 지우지 말 것.
+- **`Remove-Item -Recurse`를 junction 자체에 쓰면 대상 폴더 내용까지 지워질 수
+  있다.** 링크만 없애려면 `(Get-Item <경로>).Delete()` 를 쓴다.
+- F:에 실제로 올라가 있는 `downloads/` 용량은 **346.8 GB**다(junction 제외).
+
+**드라이브 역할** (2026-08-17): C: 294 GB 여유(SNAP 임시) · D: 178 GB(SLC 원본) ·
+E: 812 GB(GRD 원본) · F: 243 GB(작업·산출물) · X:/Y: NAS
 | **`rtc_grd_frost_vh/`** | **154 GB** | ★ **VH · Frost · external DEM RTC — 현행 정본** |
 | `dem_basin/` | 2.6 GB | external DEM 입력. `korea_full_cop30.tif`가 기준 DEM |
 | `water_otsu/` | 0.4 GB | 궤도별 Otsu 수체 지도 + **임계값·면적 CSV(git 추적)** |
@@ -70,3 +92,7 @@
    "VV·Frost·자동 DEM RTC"라고 적어야 오해가 없다.
 4. 실험·벤치마크 산출물은 결론이 문서에 반영되면 지워도 된다. 결론이 어느
    문서에 있는지 먼저 확인할 것.
+5. **문서에 적힌 경로·용량을 그대로 믿지 말고 실측한다.** 이 문서의 초판도
+   기존 문서의 "D:로 이동 후 junction"을 그대로 옮겨 적었다가, 실제로는
+   `sentinel1_grd`도 junction(E:)이라는 점을 빠뜨렸다. `Get-Item`의 `LinkType`
+   으로 확인하면 몇 초면 된다.
