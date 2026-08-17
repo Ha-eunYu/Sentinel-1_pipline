@@ -47,7 +47,10 @@ def key(name: str) -> str:
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 DRY = "--dry-run" in sys.argv
 MONTHS = args or ["202507", "202606", "202607"]
-BBOX = [125.0, 33.0, 130.0, 38.5]
+# 한반도 전체(북한 포함) 검색 상자. 예전 값 [125.0, 33.0, 130.0, 38.5]은 남한
+# 위주라 북한·서해·동해 프레임이 통째로 빠졌다(2026-08-17 한반도 대상 확대).
+# 느슨한 상자로 받아온 뒤 footprint 로 정확히 거른다(touches_korea).
+BBOX = [124.0, 32.9, 132.0, 43.5]
 NAS = Path(r"X:\02_Analysis\20260708_Flood")
 
 load_env(".env")

@@ -45,6 +45,17 @@ ZONES = {
     "nk": ("북한·해상", lambda r: float(r["sk_pct"]) <= 0),
 }
 
+# NAS 보유분. 로컬에 없다고 다 받으면 안 된다 — 이미 NAS 에 있는 것이 많다.
+# (2026-08-17 확인: 22-08·23-07·24-07 자료도 NAS 에 있다)
+NAS_ROOTS = [
+    r"X:\02_Analysis\20220906_Typhoon hinnamnor_International Charter",
+    r"X:\02_Analysis\20230714_Flood_Korea",
+    r"X:\02_Analysis\20240717_Flood_Korea",
+    r"X:\02_Analysis\20250717_Flood",
+    r"X:\02_Analysis\20250725_Namgang",
+    r"X:\02_Analysis\20260708_Flood",
+]
+
 
 def key_of(name: str) -> tuple[str, str] | None:
     m = KEY_RE.search(name)
@@ -61,6 +72,8 @@ def main() -> None:
                     help="YYYY-MM 목록으로 제한 (예: 2025-07 2026-07)")
     ap.add_argument("--list", action="store_true",
                     help="미처리 관측을 날짜/상대궤도까지 나열")
+    ap.add_argument("--no-nas", action="store_true",
+                    help="NAS 보유분을 세지 않는다(로컬만 볼 때)")
     args = ap.parse_args()
 
     if not args.csv.exists():
@@ -70,8 +83,22 @@ def main() -> None:
     rows = list(csv.DictReader(open(args.csv, encoding="utf-8-sig")))
     zips = {k for z in GRD_DIR.glob("*.zip") if (k := key_of(z.name))}
     vh = {k for t in RTC_FROST_VH_DIR.glob("*_vh.tif") if (k := key_of(t.name))}
+
+    nas: set[tuple[str, str]] = set()
+    if not args.no_nas:
+        for root in NAS_ROOTS:
+            p = Path(root)
+            if not p.exists():
+                print(f"  (NAS 경로 없음: {root})")
+                continue
+            for f in p.rglob("S1*_IW_GRDH*"):
+                k = key_of(f.name)
+                if k:
+                    nas.add(k)
+
     zone_name, zone_ok = ZONES[args.zone]
-    print(f"기준 {zone_name} · 로컬 원본 {len(zips)}건 · VH 산출물 {len(vh)}건\n")
+    print(f"기준 {zone_name} · 로컬 원본 {len(zips)}건 · VH 산출물 {len(vh)}건 · "
+          f"NAS {len(nas)}건\n")
 
     stat: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     detail: dict[tuple[str, str], list[str]] = defaultdict(list)
@@ -82,22 +109,31 @@ def main() -> None:
         ym = r["date"][:7]
         if args.months and ym not in args.months:
             continue
-        state = "VH완료" if k in vh else ("로컬·미처리" if k in zips else "원본없음")
+        if k in vh:
+            state = "VH완료"
+        elif k in zips:
+            state = "로컬·미처리"
+        elif k in nas:
+            state = "NAS보유"      # 받을 필요 없다. 복사해 오면 된다
+        else:
+            state = "받아야함"
         stat[ym][state] += 1
         if state != "VH완료":
             detail[(ym, state)].append(
                 f"{r['date'][5:]}/rel{r['rel_orbit']}/{r['platform'][-2:]}")
 
-    print(f"{'연월':>8} {'VH완료':>7} {'로컬·미처리':>12} {'원본없음':>9} {'계':>5}")
+    cols = ("VH완료", "로컬·미처리", "NAS보유", "받아야함")
+    print(f"{'연월':>8} {'VH완료':>7} {'로컬·미처리':>12} {'NAS보유':>8} {'받아야함':>9} {'계':>5}")
     tot = defaultdict(int)
     for ym in sorted(stat):
         d = stat[ym]
-        a, b, c = d["VH완료"], d["로컬·미처리"], d["원본없음"]
-        for k2, v in (("VH완료", a), ("로컬·미처리", b), ("원본없음", c)):
-            tot[k2] += v
-        print(f"{ym:>8} {a:>7} {b:>12} {c:>9} {a+b+c:>5}")
+        vals = [d[c] for c in cols]
+        for c, v in zip(cols, vals):
+            tot[c] += v
+        print(f"{ym:>8} {vals[0]:>7} {vals[1]:>12} {vals[2]:>8} {vals[3]:>9} "
+              f"{sum(vals):>5}")
     print(f"{'합계':>8} {tot['VH완료']:>7} {tot['로컬·미처리']:>12} "
-          f"{tot['원본없음']:>9} {sum(tot.values()):>5}")
+          f"{tot['NAS보유']:>8} {tot['받아야함']:>9} {sum(tot.values()):>5}")
 
     if args.list:
         print("\n=== 미처리 상세 ===")
