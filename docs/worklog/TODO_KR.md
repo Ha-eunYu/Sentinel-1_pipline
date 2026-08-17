@@ -75,6 +75,33 @@
 > 2절, 궤도 선별 근거는
 > [RELATIVE_ORBITS_KR.md](../pipeline/RELATIVE_ORBITS_KR.md).
 
+## P0.1b — VV·자동 DEM 산출물 정리 ✅ 완료 (2026-08-17)
+
+VH external DEM 통일이 끝나 **VV RTC를 삭제**했다. 176 GB 확보(F: 67 → 243 GB).
+
+| 폴더 | 삭제 | 내용 |
+| --- | ---: | --- |
+| `downloads/rtc_grd/` | 61 tif, 82.8 GB | VV · Refined Lee · 자동 DEM |
+| `downloads/rtc_grd_frost/` | 71 tif, 93.3 GB | VV · Frost · 자동 DEM |
+
+**보존한 것**(사용자 결정): `gtc/`(81.9 GB, RTC_VS_GTC 근거), `water_otsu/`
+(수체 지도 + 임계값·면적 CSV), `rtc/`, `rtc_extdem/`, `excluded_china_japan/`,
+벤치마크.
+
+### 삭제로 생긴 결과 — 알고 있어야 할 것
+
+- **VV 기반 7월 Otsu 결과는 재현하려면 재처리가 필요하다.** 수치 자체는
+  `water_otsu/otsu_thresholds.csv`·`water_area_perrow.csv`(git 추적)와
+  [WATER_AREA_KR.md](../water/WATER_AREA_KR.md)에 남아 있다.
+- **`downloads/rtc_grd/*.vrt` 23개는 죽은 링크가 됐다**(참조하던 tif가 없다).
+  QGIS에서 열면 오류가 난다. 삭제하지 않고 어떤 조합의 모자이크였는지 기록으로
+  남겼다.
+- **2026-06 12씬 + 2026-07 3씬(6EBE·BB45·E265)은 원본 zip도 없어 로컬에서
+  완전히 사라졌다.** 필요해지면 CDSE에서 재다운로드해야 한다.
+  6월 처리 재개 시 이 점을 먼저 확인할 것.
+- `downloads/rtc_grd/get_tif_shooting_area.py`는 데이터 폴더에 있던 도구라
+  삭제 전에 `s1/tools/audit/tif_extent_report.py`로 옮겼다.
+
 ## P0.2 — 연도 간 비교 설계 (2026-08-14 확정, 실행 대기)
 
 배경·근거: [RELATIVE_ORBITS_KR.md](../pipeline/RELATIVE_ORBITS_KR.md).
