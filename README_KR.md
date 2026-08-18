@@ -154,7 +154,7 @@ s1/
     dem/                   #   make_basin_dem, prepare_ngii_dem, make_ls_mask, make_test_dem
     audit/                 #   check_*, compare_*, audit_*, benchmark_rtc,
                            #   verify_scene_footprint, audit_rtc_bbox_vs_footprint
-    monitor/               #   monitor_new_scenes (신규 촬영 감시)
+    monitor/               #   monitor_new_scenes (신규 촬영 감시), scene_dashboard (현황 창)
     scratch/               #   일회성 조사 스크립트 (재현 보장 안 함)
 
 docs/                      # 문서 (주제별)
@@ -165,13 +165,15 @@ docs/                      # 문서 (주제별)
   worklog/                 #   진행상황·TODO·작업일지
   review/                  #   코드리뷰·파이프라인 리뷰
 
-scripts/                   # PowerShell 래퍼 (archive_gtc, monitor_*)
+scripts/                   # PowerShell 래퍼 (archive_gtc, monitor_*, scene_dashboard)
 graphs/                    # SNAP GraphBuilder용 XML
 geojson/                   # AOI·경계 폴리곤
   Korea_flood_AOI.geojson  #   홍수 AOI (전처리 서브셋 기준)
   South_Korea.geojson      #   남한 간략 폴리곤 (⚠ 해안·도서 제외 — 아래 주의)
   Korea_Peninsula.geojson  #   한반도 전체 (footprint 분류용)
   NK.geojson               #   북한 경계
+  sido_simplified.geojson  #   시도 경계 28개 (남한 17 + 북한 11, 500m 단순화)
+                           #   현황 창의 "충남·전남" 위치 표시용
   dams8.geojson / dam_*.geojson / aoi_*.geojson  # 댐·유역 AOI
 env/                       # conda 환경 정의
 filtering/  qa/            # speckle 필터 구현·정량 QA
@@ -231,7 +233,8 @@ downloads/
 | baseline (pre-event) | — | **v3 완료 (7/21)** | 컷오프 7/3 + 7/4·7/6·7/7 빈틈메우기(북한 커버리지 확장). baseline 수체 6,308 km² |
 | 신규 침수 탐지 | — | **v3 8개 날짜 + 동일궤도 3쌍 완료** | v3: 7/4·7/7·7/13~16·7/18·7/19. 동일궤도: 7/13↔7/1·7/18↔7/6·7/19↔6/25. [FLOOD_TIMELINE_KR.md](docs/flood/FLOOD_TIMELINE_KR.md) |
 | 단일시기 수체 지도 | — | 6/25~7/20 전 날짜 완료 | baseline 무관 `flood_water_total_<날짜>.tif` (변화 아닌 상태, 고정 -16dB). **Otsu판(궤도별 18그룹)**: `water_otsu/flood_water_total_<날짜>_o<궤도>.tif` — 타일기반 Otsu 자동임계값([OTSU_SPLIT_BASED_KR.md](docs/water/OTSU_SPLIT_BASED_KR.md)), 면적 [WATER_AREA_KR.md](docs/water/WATER_AREA_KR.md) |
-| 신규 촬영 감시 | — | baseline 등록 완료(7/22) | STAC 폴링으로 한반도 신규 S1 알림. [SCENE_MONITOR_KR.md](docs/pipeline/SCENE_MONITOR_KR.md) |
+| 신규 촬영 감시 | — | **작업 스케줄러 1시간 간격 가동(8/18)** | STAC 폴링으로 한반도 신규 S1 알림. [SCENE_MONITOR_KR.md](docs/pipeline/SCENE_MONITOR_KR.md) |
+| 파이프라인 현황 창 | — | **신설(8/18)** | CDSE 최신 촬영(시각·궤도·위치) + 다운로드/대기/처리중/완료를 한 창에서. [SCENE_DASHBOARD_KR.md](docs/pipeline/SCENE_DASHBOARD_KR.md) |
 
 - **홍수 침수 시간선(v3)**: 7/14~15 조합에서 **남한 154.1 km²(보수적)** 최대
   관측 — 상세는 [FLOOD_TIMELINE_KR.md](docs/flood/FLOOD_TIMELINE_KR.md). (**⚠️ 2026-07-22
@@ -287,11 +290,21 @@ SNAP에 `demName="Copernicus 30m Global DEM"`(자동 캐시)을 주면 **하구 
 안 메워진다.**
 
 ```bash
+# 남한 전용 (대권역 21 + 댐유역 8을 nodata 0개로, 제주 포함)
 python -m s1.tools.dem.make_basin_dem --bounds 125.0,32.9,131.0,39.9 --name korea_full
+# 한반도 전체 (북한 포함) — 현행 표준
+python -m s1.tools.dem.make_basin_dem --bounds 123.5,32.8,131.3,43.3 --name korea_peninsula
 ```
 
-`downloads/dem_basin/korea_full_cop30.tif`(37타일 733 MB)가 **대권역 21개 +
-댐유역 8개를 nodata 0개로** 덮는다(제주 포함). 유역별 DEM을 고를 필요가 없다.
+| DEM | 범위 | 용량 | 용도 |
+| --- | --- | ---: | --- |
+| **`korea_peninsula_cop30.tif`** | 123.5~131.3E, **32.8~43.3N** | 1.71 GB | **한반도 전체 — 현행 표준** |
+| `korea_full_cop30.tif` | 125.0~131.0E, 32.9~39.9N | 0.73 GB | 남한 전용(제주·울릉 포함) |
+
+> **한반도를 다룰 땐 `korea_peninsula_cop30.tif`를 쓴다(2026-08-18 확정).**
+> `korea_full`은 **북위 39.9°까지**라 북한 북부가 통째로 결측이 된다 —
+> 실측한 8월 씬 32장 중 8장이 한반도 육지의 **100%**를 잃었다(ISSUES #17).
+> 규격은 [PREPROCESSING_SPEC_KR.md](docs/pipeline/PREPROCESSING_SPEC_KR.md) 1절이 정본.
 
 ⚠ 세 가지
 
@@ -445,8 +458,12 @@ D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 
   **26년 7·8월 관측 달력**: 날짜 × 상대궤도, 궤도 × 대권역 커버율, 실제 반복 주기
 - [ISSUES_KR.md](docs/worklog/ISSUES_KR.md) — **이슈 트래킹**: SNAP external DEM(VRT 불가·
   하구 결측), PowerShell stderr 오탐, 궤도번호 앞 0 유실, 미해결 항목 상태
-- [WORKLOG_20260814_KR.md](docs/worklog/WORKLOG_20260814_KR.md) — **최신**: 상대궤도 재정립
-  (5개년 인벤토리·궤도 짝 정정), VH external DEM 통일, 오늘 밟은 함정 6건
+- [PREPROCESSING_SPEC_KR.md](docs/pipeline/PREPROCESSING_SPEC_KR.md) — **전처리 규격
+  정본**: DEM 선택 근거(한반도는 `korea_peninsula_cop30.tif`), 그래프 8단계, 확정 파라미터
+- [WORKLOG_20260818_KR.md](docs/worklog/WORKLOG_20260818_KR.md) — **최신**: 8월 남한 →
+  한반도 확대, external DEM 재설계(북위 39.9° 한계), STAC footprint 누락 버그, KST 환산
+- [WORKLOG_20260814_KR.md](docs/worklog/WORKLOG_20260814_KR.md) — 상대궤도 재정립
+  (5개년 인벤토리·궤도 짝 정정), VH external DEM 통일, 그날 밟은 함정 6건
 - [WORKLOG_20260813_KR.md](docs/worklog/WORKLOG_20260813_KR.md) — 저장소 `s1/` 패키지
   재구성과 공용 모듈(paths·scene·aoi·batch_runner) 분리 내역
 - [DROUGHT_KR.md](docs/drought/DROUGHT_KR.md) — 25년 7월 대비 26년 7월 남한 가뭄 판정
@@ -469,6 +486,8 @@ D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 
   픽셀 vs 폴리곤 면적 산출 방식
 - [SCENE_MONITOR_KR.md](docs/pipeline/SCENE_MONITOR_KR.md) — 한반도 신규 Sentinel-1 촬영 자동
   감시와 윈도우 백그라운드(작업 스케줄러 등) 설정
+- [SCENE_DASHBOARD_KR.md](docs/pipeline/SCENE_DASHBOARD_KR.md) — 상시 현황 창: CDSE 최신 촬영
+  (시각·상대궤도·시도 단위 위치)과 이 PC의 다운로드·전처리 대기/처리중/완료
 - [PROCESS_202507_202607_KR.md](docs/pipeline/PROCESS_202507_202607_KR.md) — 2025-07 ↔ 2026-07
   두 시기를 동일 파이프라인으로 처리한 전 과정(씬 선별 → RTC → 모자이크 → Otsu → 면적)
 - [WORKLOG_20260807_KR.md](docs/worklog/WORKLOG_20260807_KR.md) — **8월 가뭄 비교쌍**(ASC54
