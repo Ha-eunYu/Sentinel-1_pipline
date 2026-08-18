@@ -101,7 +101,7 @@ def orbit_dir(begin: datetime) -> str:
     궤도는 KST 18시대, 하강 궤도는 KST 06시대에 지난다
     (ORBIT_CALENDAR_202607_08_KR.md 1-1절의 환산표와 같은 규칙).
     """
-    return "상행" if begin.astimezone(KST).hour >= 12 else "하행"
+    return "상행(ASC)" if begin.astimezone(KST).hour >= 12 else "하행(DESC)"
 
 
 def download_plan(url: str, out_dir: Path = PLAN_DIR, timeout: int = 180) -> Path:

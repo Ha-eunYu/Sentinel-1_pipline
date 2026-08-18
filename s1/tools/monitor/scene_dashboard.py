@@ -82,12 +82,14 @@ from s1.core.paths import (DOWNLOADS_DIR, GRD_DIR,               # noqa: E402
 from s1.core.scene import parse_scene                            # noqa: E402
 from s1.tools.monitor import acquisition_plan                    # noqa: E402
 from s1.tools.monitor.footprint_label import (SIDO_GEOJSON, SidoIndex,  # noqa: E402
-                                              describe_footprint)
+                                              describe_footprint,
+                                              summarize_rings, zip_footprint)
 from s1.tools.monitor.monitor_new_scenes import (KOREA_BBOX, Boundary,  # noqa: E402
                                                  load_rings, search_stac)
 
 KST = timezone(timedelta(hours=9))
 CACHE_PATH = DOWNLOADS_DIR / "dashboard_cache.json"
+FOOTPRINT_CACHE = DOWNLOADS_DIR / "footprint_cache.json"
 
 # 배치 러너가 쓰는 임시폴더 접두사(s1/preprocess/batch_runner.py 호출부들).
 TMP_PREFIXES = ("frostrtc_", "rtc_", "gtc_", "slcrtc_", "snapbatch_")
@@ -109,6 +111,16 @@ def scene_key(name: str) -> tuple[str, str] | None:
     return (m.group(1), k.orbit)
 
 
+def dir_label(text: str) -> str:
+    """`상행` → `상행(ASC)`. 이미 약어가 붙어 있으면 그대로 둔다.
+
+    계획 캐시에는 예전 형식(약어 없음)이 남아 있을 수 있어 표시할 때 맞춘다.
+    """
+    if not text or "(" in text:
+        return text
+    return {"상행": "상행(ASC)", "하행": "하행(DESC)"}.get(text, text)
+
+
 def sat_label(name: str) -> str:
     """위성(S1A~S1D). 표마다 같은 자리·같은 이름의 칸으로 쓴다."""
     k = parse_scene(name)
@@ -127,7 +139,7 @@ def kst_of(name: str) -> str:
     if not m:
         return "-"
     dt = datetime.strptime(m.group(1), "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
-    return f"{dt.astimezone(KST):%m-%d %H:%M}"
+    return f"{dt.astimezone(KST):%Y-%m-%d %H:%M}"
 
 
 def short_id(name: str) -> str:
@@ -151,15 +163,22 @@ class LocalState:
     outs: dict = field(default_factory=dict)        # key -> (Path, mtime, size)
     busy: dict = field(default_factory=dict)        # key -> (파일명, 시작시각, stale)
     parts: dict = field(default_factory=dict)       # key -> (Path, mtime, size)
+    overlaps: dict = field(default_factory=dict)    # key -> 한반도 겹침%(zip footprint)
     gpt_procs: int = 0                              # -1 = 확인 실패
     scanned: float = 0.0
 
-    def state_of(self, key) -> str:
+    def state_of(self, key, min_overlap: float = 1.0) -> str:
         if key in self.busy:
             return "중단?" if self.busy[key][2] else "전처리중"
         if key in self.outs:
             return "완료"
         if key in self.zips:
+            # 받아 놓고 보니 한반도를 안 찍은 씬은 **대기가 아니라 제외**다.
+            # 이 구분이 없으면 중국·일본 프레임이 영원히 "대기"로 남아, 진짜
+            # 밀린 일감과 섞인다(2026-08-18 B5F3 0.00%가 그랬다).
+            ov = self.overlaps.get(key)
+            if ov is not None and ov < min_overlap:
+                return "제외"
             return "대기"
         if key in self.parts:
             return "받는중"
@@ -236,6 +255,57 @@ def scan_local(out_dir: Path, out_suffix: str, stale_minutes: int = 30) -> Local
     return st
 
 
+def scan_footprints(st: LocalState, min_overlap: float = 1.0,
+                    step: float = 0.05, limit: int = 40) -> int:
+    """산출물이 없는 zip의 **한반도 겹침%**를 원본 footprint로 재 둔다.
+
+    "왜 이게 아직 대기지?"의 답이 둘로 갈린다 — (a) 진짜 밀린 것, (b) 애초에
+    한반도를 안 찍어 처리 대상이 아닌 것. 카탈로그 조회창(기본 7일) 밖의 씬은
+    STAC geometry가 없으니 **손에 있는 zip의 `preview/map-overlay.kml`**을 읽어
+    판정한다(PREPROCESSING_SPEC_KR.md 4절의 기준과 같다).
+
+    결과는 `downloads/footprint_cache.json`에 (씬키 → %)로 남긴다. zip 하나에
+    수십 ms 걸리고 값이 변할 일이 없어, 한 번 잰 것은 다시 재지 않는다.
+    한 번에 `limit`개까지만 처리해 첫 실행이 화면을 붙잡지 않게 한다.
+    """
+    cache: dict = {}
+    try:
+        cache = json.loads(FOOTPRINT_CACHE.read_text(encoding="utf-8"))
+    except Exception:                                        # noqa: BLE001
+        pass
+
+    for key, pct in cache.items():
+        k = tuple(key.split("|"))
+        if k in st.zips:
+            st.overlaps[k] = pct
+
+    todo = [k for k in st.zips
+            if k not in st.outs and k not in st.busy and k not in st.overlaps]
+    if not todo:
+        return 0
+
+    boundary = Boundary(load_rings(KOREA_PENINSULA)) if KOREA_PENINSULA.exists() else None
+    if boundary is None:
+        return 0
+    done = 0
+    for key in sorted(todo, reverse=True)[:limit]:           # 최근 것부터
+        rings = zip_footprint(st.zips[key][0])
+        if not rings:
+            continue
+        pct, _where = summarize_rings(rings, boundary, None, step)
+        st.overlaps[key] = round(pct, 2)
+        cache["|".join(key)] = round(pct, 2)
+        done += 1
+
+    if done:
+        try:
+            FOOTPRINT_CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=1),
+                                       encoding="utf-8")
+        except Exception:                                    # noqa: BLE001
+            pass
+    return done
+
+
 # --- CDSE 조회 ---------------------------------------------------------------
 
 def fetch_cdse(days: int, collection: str, min_overlap: float,
@@ -254,7 +324,10 @@ def fetch_cdse(days: int, collection: str, min_overlap: float,
             "id": f["id"],
             "datetime": f["datetime"],
             "rel": f.get("rel"),
-            "dir": {"ascending": "상행", "descending": "하행"}.get(f.get("state") or "", ""),
+            # 상행(ASC)·하행(DESC) — 한글과 영문 약어를 같이 적는다. 문서·파일명·
+            # 외부 도구가 ASC/DESC 를 쓰고, 화면은 한글로 읽는다.
+            "dir": {"ascending": "상행(ASC)", "descending": "하행(DESC)"}
+                   .get(f.get("state") or "", ""),
             "overlap": round(pct, 1),
             "where": where,
         })
@@ -262,7 +335,8 @@ def fetch_cdse(days: int, collection: str, min_overlap: float,
     return rows
 
 
-def merge_rows(cdse: list[dict], st: LocalState, days: int) -> list[dict]:
+def merge_rows(cdse: list[dict], st: LocalState, days: int,
+               min_overlap: float = 1.0, plan: list[dict] | None = None) -> list[dict]:
     """CDSE 목록과 로컬 보유분을 **씬 하나당 한 줄**로 합친다.
 
     카탈로그와 다운로드를 표 두 개로 나눠 두면 같은 촬영이 양쪽에 나와 눈이 두
@@ -291,7 +365,7 @@ def merge_rows(cdse: list[dict], st: LocalState, days: int) -> list[dict]:
             "where": r["where"] or "-",
             "overlap": r["overlap"],
             "size": st.size_of(key),
-            "state": st.state_of(key),
+            "state": st.state_of(key, min_overlap),
             "name": name,
         })
 
@@ -313,18 +387,41 @@ def merge_rows(cdse: list[dict], st: LocalState, days: int) -> list[dict]:
             "sid": sid_label(name) if name else "-",
             "rel": None, "orbit": "-", "where": "-", "overlap": None,
             "size": st.size_of(key),
-            "state": st.state_of(key),
+            "state": st.state_of(key, min_overlap),
             "name": name,
         })
 
+    # 앞으로 찍을 것(ESA 계획)을 **같은 표 위쪽**에 얹는다. 카탈로그와 계획을
+    # 따로 그리면 "언제 뭐가 찍히나"를 두 군데서 읽어야 한다. 시간축은 하나다.
+    #
+    # ⚠ 알갱이가 다르다 — 계획 한 줄은 datatake(긴 띠) 하나이고, 그게 카탈로그에
+    #   오면 프레임 여러 장이 된다(rel134 한 패스 = 7줄). 그래서 예정 줄은 씬
+    #   칸을 '-'로 두고 상태를 '예정'으로 찍어 카탈로그 줄과 구별한다.
+    for p in plan or []:
+        rows.append({
+            "key": None,
+            "when": p["begin"],
+            "sat": p["sat"], "sid": "-",
+            "rel": int(p["rel"]) if str(p["rel"]).isdigit() else None,
+            "orbit": f"rel{p['rel']} {dir_label(p.get('dir', ''))}".strip(),
+            "where": p["where"] or "-",
+            "overlap": p["cover_pct"],
+            "size": None,
+            "state": "예정",
+            "note": f"댐·보 {len(p['dams'])}곳" if p["dams"] else "",
+            "name": "",
+        })
+
+    for r in rows:
+        r.setdefault("note", gb(r["size"]) if r.get("size") else "")
     rows.sort(key=lambda r: r["when"], reverse=True)
     return rows
 
 
 # 상태를 파이프라인 진행 순서로 매긴다. 오름차순으로 정렬하면 **손 볼 것이 위로**
-# 온다(아직 안 받음 → 받는 중 → 대기 → 굽는 중 → 완료).
-STATE_RANK = {"미수신": 0, "받는중": 1, "대기": 2, "전처리중": 3, "중단?": 4,
-              "완료": 5}
+# 온다(예정 → 아직 안 받음 → 받는 중 → 대기 → 굽는 중 → 완료 → 제외).
+STATE_RANK = {"예정": 0, "미수신": 1, "받는중": 2, "대기": 3, "전처리중": 4,
+              "중단?": 5, "완료": 6, "제외": 7}
 
 # 머리글 클릭 정렬에서 쓸 열별 정렬값. 화면에 찍힌 문자열이 아니라 **원래 값**으로
 # 정렬한다 — "1.12 GB"를 문자열로 세우면 9 GB가 10 GB보다 뒤로 간다.
@@ -348,15 +445,6 @@ PROC_SORT = {
     "time": lambda row: row["obs"],
 }
 
-PLAN_SORT = {
-    "time": lambda row: row["raw"]["begin"],
-    "sat": lambda row: row["raw"]["sat"],
-    "orbit": lambda row: int(row["raw"]["rel"] or 0),
-    "where": lambda row: row["raw"]["where"],
-    "cover": lambda row: row["raw"]["cover_pct"],
-    "dams": lambda row: len(row["raw"]["dams"]),
-}
-
 
 def load_cache() -> dict:
     try:
@@ -378,9 +466,15 @@ def save_cache(rows: list[dict], fetched: str) -> None:
 # --- 표시용 도우미 -----------------------------------------------------------
 
 def kst_hm(iso: str) -> str:
+    """UTC ISO -> KST `YYYY-MM-DD HH:MM`.
+
+    연도를 적는다. 이 창은 7일치만 보여 주지만 전처리 표에는 작년 비교쌍
+    (2025-07·08)이 섞여 올라오고, 하강궤도는 UTC->KST 로 날짜가 하루 넘어간다.
+    월-일만 적어 두면 25년 것과 26년 것이 같은 줄로 보인다.
+    """
     try:
         dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-        return f"{dt.astimezone(KST):%m-%d %H:%M}"
+        return f"{dt.astimezone(KST):%Y-%m-%d %H:%M}"
     except Exception:                                        # noqa: BLE001
         return "?"
 
@@ -437,40 +531,31 @@ def render_text(rows: list[dict], st: LocalState, fetched: str, args) -> str:
     out: list[str] = []
     add = out.append
 
-    merged = merge_rows(rows, st, args.days)
+    plan, until = plan_rows_for_once(args)
+    merged = merge_rows(rows, st, args.days, args.min_overlap, plan)
     n_new = sum(1 for r in merged if r["state"] == "미수신")
+    n_plan = sum(1 for r in merged if r["state"] == "예정")
     busy = [k for k in st.busy if not st.busy[k][2]]
     stalled = [k for k in st.busy if st.busy[k][2]]
-    pending = [k for k in st.zips if k not in st.outs and k not in st.busy]
+    pending = [k for k in st.zips if st.state_of(k, args.min_overlap) == "대기"]
 
-    add(f"■ 최근 촬영 {args.days}일 (CDSE 조회 {fetched}) — {len(merged)}개, "
-        f"미수신 {n_new} · 보유 {len(st.zips)}")
+    add(f"■ 촬영 — 예정 {n_plan}건(계획 {acquisition_plan.kst_str(until)} KST 까지) · "
+        f"최근 {args.days}일 {len(merged) - n_plan}건 (CDSE 조회 {fetched})")
     if not merged:
         add("  (조회창 안에 한반도 촬영이 없습니다)")
     else:
-        add(f"  {'촬영(KST)':<12} {'위성':<5} {'씬':<6} {'궤도':<10} {'위치':<22} "
-            f"{'한반도':>6} {'크기':>9}  상태")
+        add(f"  {'촬영(KST)':<18} {'위성':<5} {'씬':<6} {'궤도':<14} "
+            f"{'위치':<22} {'한반도':>6} {'상태':<6} 비고")
     for r in merged[:args.scene_rows]:
         ov = f"{r['overlap']:.1f}%" if r["overlap"] is not None else "-"
-        size = gb(r["size"]) if r["size"] else "-"
-        add(f"  {kst_hm(r['when']):<12} {r['sat']:<5} {r['sid']:<6} "
-            f"{r['orbit']:<10} {r['where']:<22} {ov:>6} {size:>9}  {r['state']}")
+        add(f"  {kst_hm(r['when']):<18} {r['sat']:<5} {r['sid']:<6} "
+            f"{r['orbit']:<14} {r['where']:<22} {ov:>6} {r['state']:<6} "
+            f"{r.get('note', '')}")
 
     add("")
-    plan, until = plan_rows_for_once(args)
-    add(f"■ 촬영 예정 {args.plan_days}일 (ESA 계획) — {len(plan)}건"
-        + (f" · 계획은 {acquisition_plan.kst_str(until)} KST 까지" if until else ""))
-    if not plan and args.plan_hours > 0:
-        add("  (그 기간에 한반도 통과 없음 — 계획이 덮는 끝을 위에서 확인할 것)")
-    for p in plan[:args.plan_rows]:
-        dams = f"  댐·보 {len(p['dams'])}곳" if p["dams"] else ""
-        add(f"  {acquisition_plan.kst_str(p['begin'])} KST  {p['sat']} "
-            f"rel{p['rel']:>3} {p.get('dir', '')}  "
-            f"{p['where'] or '-':<22} 한반도 {p['cover_pct']:>5.1f}%{dams}")
-
-    add("")
+    n_skip = sum(1 for k in st.zips if st.state_of(k, args.min_overlap) == "제외")
     add(f"■ 전처리({rel(args.out_dir)}) — 대기 {len(pending)} · 처리중 {len(busy)}"
-        f" · 완료 {len(st.outs)}"
+        f" · 완료 {len(st.outs)}" + (f" · 제외 {n_skip}" if n_skip else "")
         + (f" · 중단? {len(stalled)}" if stalled else "")
         + (f"   [gpt {st.gpt_procs}개 실행 중]" if st.gpt_procs > 0 else ""))
     for key in sorted(st.busy, key=lambda k: st.busy[k][1]):
@@ -508,6 +593,7 @@ class Dashboard:
         self.names: dict = {}          # (표, 줄) -> 씬 파일명 (더블클릭 복사용)
         self.headings: dict = {}       # 표 -> {열: 머리글 원문} (▲▼ 표시용)
         self.sort: dict = {}           # 표 -> (열, 내림차순) — 없으면 기본 순서
+        self.row_tops: dict = {}       # 표 -> 마지막 맨 윗줄(스크롤 복귀 판단용)
         self.plan: list[dict] = []     # 촬영 예정(ESA 계획 KML)
         self.plan_fetched = "-"
         self.plan_until = ""           # 계획이 덮는 끝(UTC ISO)
@@ -557,33 +643,28 @@ class Dashboard:
         self.summary = ttk.Label(self.root, text="", padding=(8, 2))
         self.summary.pack(fill="x")
 
-        # 촬영 하나당 한 줄 — 카탈로그(궤도·위치)와 로컬(크기·상태)을 한 표에서.
+        # 촬영 하나당 한 줄 — **예정(ESA 계획)과 최근(CDSE 카탈로그)을 한 표에**
+        # 시간순으로 얹는다. 시간축이 하나뿐인데 표를 둘로 나누면 "언제 뭐가
+        # 찍히나"를 두 군데서 읽게 된다. 예정 줄은 초록 + 씬 `-` + 상태 '예정'.
         self.tv_scene = self._table(
-            "최근 촬영",
-            [("time", "촬영(KST)", 84), ("sat", "위성", 46), ("sid", "씬", 50),
-             ("orbit", "궤도", 74), ("where", "위치", 116),
-             ("ov", "한반도", 50, "e"), ("size", "크기", 60, "e"),
-             ("st", "상태", 58)],
+            "촬영 — 예정 · 최근",
+            [("time", "촬영(KST)", 118), ("sat", "위성", 44), ("sid", "씬", 46),
+             ("orbit", "궤도", 120), ("where", "위치", 104),
+             ("ov", "한반도", 50, "e"), ("st", "상태", 56),
+             ("note", "비고", 90)],
             args.scene_rows, grow=False,
-            sortable=("time", "sat", "sid", "orbit", "where", "ov", "size", "st"))
-        # 앞으로 찍을 것 — 카탈로그가 아니라 ESA 촬영계획 KML 이 출처다.
-        self.tv_plan = self._table(
-            "촬영 예정 (ESA 계획)",
-            [("time", "촬영(KST)", 84), ("sat", "위성", 46), ("orbit", "궤도", 74),
-             ("where", "위치", 166), ("cover", "한반도", 50, "e"),
-             ("dams", "댐·보", 50, "e")],
-            args.plan_rows, grow=False,
-            sortable=("time", "sat", "orbit", "where", "cover", "dams"))
-        # 위 표와 같은 순서·같은 이름으로 — 두 표를 눈으로 잇는 것은 씬 이름이다.
-        # '비고'는 줄마다 담는 값이 달라(경과·크기·완료시각) 정렬 대상이 아니다.
+            sortable=("time", "sat", "sid", "orbit", "where", "ov", "st"))
+        # 위 표와 같은 이름·같은 순서로 시작한다 — 두 표를 눈으로 잇는 것은
+        # 촬영시각과 씬 이름이다. '비고'는 줄마다 담는 값이 달라(경과·크기·
+        # 완료시각) 정렬 대상이 아니다.
         self.tv_proc = self._table(
             "전처리",
-            [("time", "촬영(KST)", 84), ("sat", "위성", 46), ("sid", "씬", 50),
-             ("st", "상태", 58), ("info", "비고", 190)],
+            [("time", "촬영(KST)", 118), ("sat", "위성", 44), ("sid", "씬", 46),
+             ("st", "상태", 56), ("info", "비고", 190)],
             args.proc_rows, grow=True,
             sortable=("time", "sat", "sid", "st"))
 
-        for tv in (self.tv_scene, self.tv_plan, self.tv_proc):
+        for tv in (self.tv_scene, self.tv_proc):
             tv.tag_configure("hot", foreground="#c62828")     # 손 볼 것(중단?)
             tv.tag_configure("new", foreground="#b06000")     # 아직 안 받은 것
             tv.tag_configure("run", foreground="#0057b8")     # 진행 중
@@ -679,6 +760,9 @@ class Dashboard:
             try:
                 st = scan_local(self.args.out_dir, self.args.out_suffix,
                                 self.args.stale_minutes)
+                # 대기로 남은 zip 의 한반도 겹침%를 재 둔다(캐시). 이게 있어야
+                # "밀린 것"과 "애초에 대상이 아닌 것"이 갈린다.
+                scan_footprints(st, self.args.min_overlap)
                 self.q.put(("local", st))
             except Exception as e:                           # noqa: BLE001
                 self.q.put(("error", f"로컬 스캔 실패: {e}"))
@@ -736,16 +820,20 @@ class Dashboard:
             pass
         self.root.after(1000, self.tick)
 
-    TAGS = {"미수신": "new", "받는중": "run", "전처리중": "run",
-            "완료": "done", "중단?": "hot"}
+    TAGS = {"예정": "plan", "미수신": "new", "받는중": "run", "전처리중": "run",
+            "완료": "done", "중단?": "hot", "제외": "none"}
 
     def draw(self) -> None:
         st = self.local
-        merged = merge_rows(self.rows, st, self.args.days)
+        merged = merge_rows(self.rows, st, self.args.days,
+                            self.args.min_overlap, self.plan)
         busy = [k for k in st.busy if not st.busy[k][2]]
         stalled = [k for k in st.busy if st.busy[k][2]]
-        pending = [k for k in st.zips if k not in st.outs and k not in st.busy]
+        pending = [k for k in st.zips
+                   if st.state_of(k, self.args.min_overlap) == "대기"]
         n_new = sum(1 for r in merged if r["state"] == "미수신")
+        n_skip = sum(1 for k in st.zips
+                     if st.state_of(k, self.args.min_overlap) == "제외")
         self.names.clear()
 
         scanned = (datetime.fromtimestamp(st.scanned, KST).strftime("%H:%M:%S")
@@ -764,43 +852,32 @@ class Dashboard:
                   + f"    |    보유 {len(st.zips)}"
                   + f"    |    대기 {len(pending)} · 처리중 {len(busy)}"
                   + (f" · 중단? {len(stalled)}" if stalled else "")
-                  + f" · 완료 {len(st.outs)}"))
+                  + f" · 완료 {len(st.outs)}"
+                  + (f" · 제외 {n_skip}" if n_skip else "")))
 
-        # 최근 촬영 — 카탈로그와 로컬을 한 줄로 -------------------------------
+        # 촬영 — 예정 · 최근을 한 표에 --------------------------------------
         scene_rows = [{
             "tag": self.TAGS.get(r["state"], ""), "name": r["name"], "raw": r,
             "values": (kst_hm(r["when"]), r["sat"], r["sid"], r["orbit"], r["where"],
                        f"{r['overlap']:.0f}%" if r["overlap"] is not None else "-",
-                       gb(r["size"]) if r["size"] else "-", r["state"]),
+                       r["state"], r.get("note", "")),
         } for r in merged[:self.args.scene_rows * 4]]
 
         self.tv_scene.delete(*self.tv_scene.get_children())
         if not scene_rows:
             self._insert(self.tv_scene, "none", "",
-                         ("", "", "", f"최근 {self.args.days}일 한반도 촬영 없음",
+                         ("", "", "", "", f"최근 {self.args.days}일 촬영 없음",
                           "", "", ""))
+        elif not any(r["raw"]["state"] == "예정" for r in scene_rows):
+            # 예정 줄이 하나도 없을 때만 계획 커버리지를 적는다 — "통과 없음"과
+            # "계획이 아직 안 나옴"을 구별하기 위해서다.
+            until = (f"{acquisition_plan.kst_str(self.plan_until)} KST 까지"
+                     if self.plan_until else "아직 못 받음")
+            self._insert(self.tv_scene, "none", "",
+                         ("", "", "", "", f"예정 없음 · 계획 {until}", "", "예정", ""))
         for row in self._sorted(self.tv_scene, scene_rows, SCENE_SORT):
             self._insert(self.tv_scene, row["tag"], row["name"], row["values"])
-
-        # 촬영 예정 ------------------------------------------------------------
-        plan_rows = [{
-            "tag": "plan", "name": "", "raw": p,
-            "values": (acquisition_plan.kst_str(p["begin"]), p["sat"],
-                       f"rel{p['rel']} {p.get('dir', '')}".strip(),
-                       p["where"] or "-", f"{p['cover_pct']:.0f}%",
-                       str(len(p["dams"])) if p["dams"] else "-"),
-        } for p in self.plan]
-
-        self.tv_plan.delete(*self.tv_plan.get_children())
-        if not plan_rows:
-            # 계획이 어디까지 덮는지 같이 적는다 — 그게 없으면 "통과 없음"과
-            # "계획이 아직 안 나옴"이 똑같아 보인다.
-            until = (f"계획은 {acquisition_plan.kst_str(self.plan_until)} KST 까지"
-                     if self.plan_until else "계획을 아직 못 받았다")
-            self._insert(self.tv_plan, "none", "",
-                         ("", "", "", f"예정 없음 — {until}", "", ""))
-        for row in self._sorted(self.tv_plan, plan_rows, PLAN_SORT):
-            self._insert(self.tv_plan, row["tag"], row["name"], row["values"])
+        self._after_fill(self.tv_scene, self._sorted(self.tv_scene, scene_rows, SCENE_SORT))
 
         # 전처리 ---------------------------------------------------------------
         proc_rows = []
@@ -824,6 +901,7 @@ class Dashboard:
             self._insert(self.tv_proc, "none", "", ("", "", "", "지금 굽는 씬 없음"))
         for row in self._sorted(self.tv_proc, proc_rows, PROC_SORT):
             self._insert(self.tv_proc, row["tag"], row["name"], row["values"])
+        self._after_fill(self.tv_proc, self._sorted(self.tv_proc, proc_rows, PROC_SORT))
 
     @staticmethod
     def _proc_row(state: str, name: str, tag: str, info: str) -> dict:
@@ -839,6 +917,27 @@ class Dashboard:
         item = tv.insert("", "end", tags=(tag,), values=values)
         if name:
             self.names[(str(tv), item)] = name
+
+    def _after_fill(self, tv, rows: list) -> None:
+        """맨 윗줄이 바뀌었으면 화면도 맨 위로 되돌린다.
+
+        Treeview 는 내용을 지웠다 다시 채워도 **스크롤 위치를 기억한다.** 그래서
+        예정 줄이 뒤늦게 붙으면(계획 조회는 로컬 스캔보다 느리다) 새로 생긴
+        윗줄들이 화면 밖에 숨는다 — 2026-08-19 실측에서 예정 6건 중 2건만
+        보였다.
+
+        되돌리는 조건을 "맨 윗줄이 바뀌었을 때"로 둔 이유: 20초마다 다시 그리는
+        화면이라 무조건 위로 올리면 아래를 읽고 있을 때 계속 튕긴다. 새 촬영이
+        올라온 순간에만 위로 데려온다.
+
+        `after_idle`로 미루는 것은 Tk가 새 줄들의 배치를 끝낸 뒤에 스크롤을
+        움직여야 실제로 먹기 때문이다.
+        """
+        key = str(tv)
+        top = rows[0]["values"] if rows else None
+        if self.row_tops.get(key) != top:
+            self.row_tops[key] = top
+            self.root.after_idle(lambda t=tv: t.yview_moveto(0))
 
     def run(self) -> None:
         self.root.mainloop()
@@ -873,13 +972,12 @@ def build_parser() -> argparse.ArgumentParser:
                     help="촬영 계획을 며칠 앞까지 볼지. 기본 10")
     ap.add_argument("--plan-hours", type=float, default=6.0,
                     help="촬영 계획 재조회 주기(시간). 0이면 계획 표를 끈다")
-    ap.add_argument("--scene-rows", type=int, default=8,
-                    help="'최근 촬영' 표에 보이는 줄 수(더 있으면 스크롤)")
-    ap.add_argument("--plan-rows", type=int, default=4,
-                    help="'촬영 예정' 표에 보이는 줄 수")
+    ap.add_argument("--scene-rows", type=int, default=11,
+                    help="'촬영' 표에 보이는 줄 수(예정+최근 합본. 더 있으면 스크롤)")
     ap.add_argument("--proc-rows", type=int, default=8,
                     help="'전처리' 표에 보이는 줄 수")
-    ap.add_argument("--geometry", default="640x760", help="창 크기·위치(예: 640x760+40+40)")
+    ap.add_argument("--geometry", default="700x720",
+                    help="창 크기·위치(예: 700x720+40+40)")
     ap.add_argument("--font", default="Malgun Gothic")
     ap.add_argument("--font-size", type=int, default=9)
     ap.add_argument("--no-topmost", dest="topmost", action="store_false",
@@ -897,6 +995,7 @@ def main() -> int:
         except Exception:                                    # noqa: BLE001
             pass
         st = scan_local(args.out_dir, args.out_suffix, args.stale_minutes)
+        scan_footprints(st, args.min_overlap)
         try:
             rows = fetch_cdse(args.days, args.collection, args.min_overlap, args.step)
             stamp = datetime.now(KST).strftime("%m-%d %H:%M")

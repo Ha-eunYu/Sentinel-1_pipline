@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import csv
 import json
+import re
+import zipfile
 from pathlib import Path
 
 from s1.core.paths import GEOJSON_DIR, PROJECT_DIR
@@ -139,6 +141,42 @@ def describe_footprint(geom: dict, boundary: Boundary | None,
     """GeoJSON geometry 판 `summarize_rings`(STAC footprint용)."""
     return summarize_rings(rings_of(geom), boundary, sido, step,
                            min_share, max_names)
+
+
+_COORD_RE = re.compile(r"<coordinates>(.*?)</coordinates>", re.S)
+
+
+def zip_footprint(zip_path: Path) -> list[list[tuple[float, float]]]:
+    """원본 GRD zip 안의 **실제 footprint** 링을 읽는다(`preview/map-overlay.kml`).
+
+    저장소 표준은 bbox가 아니라 footprint로 촬영지역을 판정하는 것이다
+    (PREPROCESSING_SPEC_KR.md 4절). 카탈로그 조회창을 벗어난 옛 씬은 STAC
+    geometry를 다시 받아올 수 없으니, 손에 있는 zip에서 직접 읽는다.
+
+    zip 전체를 푸는 게 아니라 KML 한 항목(수 KB)만 꺼내므로 빠르다.
+    """
+    try:
+        with zipfile.ZipFile(zip_path) as z:
+            names = [n for n in z.namelist()
+                     if n.lower().endswith("map-overlay.kml")]
+            if not names:
+                return []
+            text = z.read(names[0]).decode("utf-8", "replace")
+    except (OSError, zipfile.BadZipFile):
+        return []
+
+    rings: list[list[tuple[float, float]]] = []
+    for block in _COORD_RE.findall(text):
+        ring = []
+        for token in block.split():
+            parts = token.split(",")
+            if len(parts) >= 2:
+                ring.append((float(parts[0]), float(parts[1])))
+        if len(ring) >= 3:
+            if ring[0] != ring[-1]:
+                ring.append(ring[0])        # 링을 닫아야 ray-casting이 맞는다
+            rings.append(ring)
+    return rings
 
 
 def load_points(path: Path = DAM_POINTS_CSV) -> list[tuple[str, str, float, float]]:

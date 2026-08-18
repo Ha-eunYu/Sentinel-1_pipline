@@ -15,7 +15,7 @@ param(
     [switch]$Once,                      # 창 대신 콘솔 출력 한 번
     [int]$Days = 7,                     # CDSE 조회 일수
     [int]$CdseMinutes = 15,             # CDSE 조회 주기(분)
-    [string]$Geometry = "640x760",      # 창 크기(+위치)
+    [string]$Geometry = "700x720",      # 창 크기(+위치)
     [string]$OutDir = "",               # 전처리 산출물 폴더(기본: 현행 정본 VH)
     [string]$PythonCmd = ""             # 비우면 아래에서 자동 탐색
 )

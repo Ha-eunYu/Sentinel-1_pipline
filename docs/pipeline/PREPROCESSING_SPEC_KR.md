@@ -33,8 +33,8 @@ external DEM으로 다시 구우니 **1.16 GB**가 됐다(23배). 산출물 대�
 
 | DEM | 범위 (lon / lat) | 용량 | 한반도 전체 |
 | --- | --- | ---: | --- |
-| **`korea_peninsula_cop30.tif`** | **123.50~131.30 / 32.80~43.30** | **1.6 GB** | ✅ **덮음** |
-| `korea_full_cop30.tif` | 125.00~131.00 / 32.90~39.90 | 0.68 GB | ❌ 북쪽 39.9~43.0, 서쪽 124.2~125.0 부족 |
+| **`korea_peninsula_cop30.tif`** | **123.50~131.30 / 32.80~43.30** | **1.71 GB** | ✅ **덮음** |
+| `korea_full_cop30.tif` | 125.00~131.00 / 32.90~39.90 | 0.73 GB | ❌ 북쪽 39.9~43.0, 서쪽 124.2~125.0 부족 |
 | `korea_cop30.tif` | 125.40~129.90 / 33.80~38.70 | 0.50 GB | ❌ 제주(33.1~33.6) 빠짐 |
 | `han_cop30.tif` | 125.67~129.87 / 35.64~39.24 | 0.42 GB | ❌ 부산·목포·제주 빠짐 |
 | `nakdong`·`geum`·`seomjin`·`yeongsan` | 유역별 clip | 0.2~0.4 GB | ❌ 해당 유역만 |
@@ -63,15 +63,21 @@ external DEM으로 다시 구우니 **1.16 GB**가 됐다(23배). 산출물 대�
 
 ### 1-4. DEM을 새로 구울 때
 
+아래가 현재 `korea_peninsula_cop30.tif`를 만든 **실제 명령**이다. 그대로 실행하면
+같은 산출물이 재현된다.
+
 ```bash
 conda run -n s1_snappy python -m s1.tools.dem.make_basin_dem \
-    --bounds 124.0,32.8,131.5,43.5 --name korea_peninsula
+    --bounds 123.5,32.8,131.3,43.3 --name korea_peninsula
+# -> korea_peninsula_cop30.tif
+#    123.50~131.30E · 32.80~43.30N · 28081 x 37801 px · 타일 78 · 1,713 MB
 ```
 
 - COP30 타일을 모아 GeoTIFF로 굽는다(내부적으로 VRT를 거치지만 **최종 산출은
   GeoTIFF**).
 - 여유를 0.5°쯤 두는 이유: 프레임 가장자리가 DEM 밖으로 나가면 그만큼 무효가
-  된다. 반대로 DEM이 넓어도 처리 시간에는 거의 영향이 없다.
+  된다. 반대로 DEM이 넓어도 처리 시간에는 거의 영향이 없다 — SNAP은 DEM 전체를
+  올리지 않고 **씬 footprint에 걸치는 타일만** 읽는다(실측: 2-1절).
 
 ---
 
@@ -92,7 +98,7 @@ Read → Apply-Orbit-File → ThermalNoiseRemoval → Calibration(Beta0)
 | **Speckle 필터** | **Frost** (SNAP 기본 3×3, damping 2.0) | VV·VH 양쪽에서 검증(3절) |
 | **DEM** | **external `korea_peninsula_cop30.tif`** | 1절 |
 | EGM 지오이드 보정 | **끄기**(`--dem-egm` 미사용) | COP30은 이미 타원체고. 이중 적용 시 약 25 m 어긋남(ISSUES #3) |
-| 궤도 | Sentinel Precise (Auto Download), polyDegree 3, `continueOnFail=false` | 예측궤도는 수십 m 오차. 실패를 조용히 넘기지 않는다 |
+| 궤도 | Sentinel Precise (Auto Download), polyDegree 3, `continueOnFail=false` | 예측궤도는 수십 m 오차. ⚠ **`continueOnFail=false`는 POEORB 강제가 아니다** — POEORB가 없으면 SNAP이 조용히 **RESORB로 대체**하고 정상 종료한다(2-2절) |
 | 열잡음 제거 | `removeThermalNoise=true` | 수체는 저후방산란이라 열잡음 비중이 크다 |
 | 캘리브레이션 | **Beta0만** 출력 | Terrain-Flattening 입력 요건 |
 | Terrain-Flattening | 적용 (BILINEAR) | 지형 밝기 왜곡 정규화 = RTC의 핵심. 없으면 산지 사면이 물로 오판 |
@@ -114,6 +120,67 @@ conda run -n s1_snappy python -m s1.tools.preprocess.batch_grd_rtc_frost \
 ```bash
 powershell -File scripts/rebake_vh_extdem.ps1 -Month 202608 -Scenes "…" -DryRun
 ```
+
+### 2-1. 처리 시간 — 무엇이 실제로 좌우하는가 (2026-08-18 실측)
+
+`temp/logs/*.log`의 `완료 (N분)` 줄을 DEM 세대별로 모았다. **전부 배치 2개 병렬**
+(같은 PC: Xeon W-2123 4C8T · RAM 32 GB · `-q 8 -c 7G`).
+
+| DEM | 용량 | n | 평균 | 범위 |
+| --- | ---: | ---: | ---: | --- |
+| 자동 캐시 COP30 | — | 17 | **58.2분** | 19.9~106.8 |
+| `korea_cop30` | 0.50 GB | 5 | 86.0분 | 70.1~102.2 |
+| `korea_full` | 0.73 GB | 5 | 90.4분 | 77.6~105.0 |
+| **`korea_peninsula`** | **1.71 GB** | 20 | **100.9분** | 70.7~128.4 |
+
+**읽는 법 — DEM 용량은 주범이 아니다.**
+
+- `korea_full` → `korea_peninsula`는 파일이 **2.34배**(화소수 1.95배) 커졌지만
+  시간은 **+11.6%**에 그쳤다. SNAP은 DEM 전체를 올리지 않고 **씬 footprint에
+  걸치는 타일만** 읽기 때문이다. 범위를 넓히는 비용은 거의 없다.
+- 실제 계단은 **자동 DEM → external DEM**(58.2 → 90.4분, **+55%**)에서 났고,
+  이건 08-11에 이미 벌어진 일이다. 자동 DEM 쪽이 빨랐던 이유는 성능이 아니라
+  **산출물 대부분이 결측이라 쓸 화소가 없었기 때문**이다(1-1절 `F336` 0.05 GB).
+  그 표본에는 9.6분·8.4분·14.6분짜리 **깨진 산출물**이 섞여 있다.
+- **"북부 대형 프레임" 가설은 실측과 맞지 않는다.** 입력 GRD zip 평균은
+  2026-07 **1,068 MB** vs 2026-08 **1,045 MB**로 8월이 오히려 작다.
+  완료된 20씬에서 zip 크기와 소요시간의 상관은 **r = 0.49 (R² 0.24)**,
+  회귀 기울기 +100 MB당 **+4.4분**에 불과하다.
+
+> **결론**: "씬당 30분"은 **깨진 자동 DEM 산출물 시절의 하한값**이었다.
+> external DEM 도입 이후 정상 기준선은 **2병렬에서 씬당 100분 안팎**(중앙값 101.3분)이고,
+> peninsula DEM 전환이 더한 몫은 그중 **약 12%p**다. 앞으로의 일정 추정은
+> **씬당 100분 / 2병렬 = 시간당 1.2씬**을 쓴다.
+
+### 2-2. ⚠ 정밀궤도(POEORB)가 없으면 RESORB로 조용히 대체된다
+
+2026-08 배치 18씬 **전부**가 아래를 찍었다.
+
+```text
+WARNING: ApplyOrbitFileOp: No valid orbit file found for 08-AUG-2026 21:22:02
+WARNING: ApplyOrbitFileOp: Using Sentinel Restituted ...RESORB...EOF.zip instead
+```
+
+POEORB는 관측 **약 20일 후** 공개된다. 08-02~08-13 관측을 08-17~18에 처리했으니
+아직 없는 것이 정상이다. 문제는 `continueOnFail=false`가 이것을 막지 못한다는
+점 — **실패가 아니라 대체**라서 그래프는 성공으로 끝난다.
+
+| 배치 | 처리 시기 | POEORB 없음 → RESORB |
+| --- | --- | ---: |
+| `_vh_re25` / `_vh_re26` (25·26년 재처리) | 08-11 | 0 / 2 |
+| `_vh_jul26_a` / `_vh_jul26_b` (26년 7월) | 08-14 | 0 / 6 |
+| `_rtc_202608_kp_c` / `_kp_d` (26년 8월) | 08-18 | **9 / 9 (전량)** |
+
+**영향** — RESORB 자체는 정확도가 나쁘지 않지만, **아카이브에 궤도 출처가
+섞였다.** 연도 간 비교에서 기하 정합을 논할 때 이 차이를 모르면 설명할 수 없는
+어긋남으로 남는다. 산출물에 궤도 출처 기록이 없는 것은 **DEM 기록 누락(6절)과
+같은 문제**다.
+
+**할 일** — ① 산출물 사이드카에 `DEM`·`orbit source`를 남긴다.
+② 8월분은 09월 초(관측 +20일) 이후 POEORB로 재처리할지 결정한다 —
+**결정 전에 같은 씬 1장을 POEORB로 다시 구워 기하 차이를 실측**한다.
+③ `Sentinel1Calibrator: calibration LUT ... may not be reliable` 경고도
+전 배치에서 나온다(원인 미확인, 별건으로 추적).
 
 ---
 
