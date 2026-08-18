@@ -12,12 +12,31 @@ param(
     [int]$IntervalMinutes = 0,          # 0 = 한 번만. >0 이면 그 간격(분)으로 무한 반복.
     [int]$Days = 4,
     [string]$Collection = "sentinel-1-grd",
-    [string]$PythonCmd = "conda run -n s1_snappy python"
+    [string]$PythonCmd = ""             # 비우면 아래에서 자동 탐색
 )
 
 $ErrorActionPreference = "Continue"
+
+# 이 감시 스크립트는 표준 라이브러리만 쓴다(shapely·numpy·저장소 모듈 모두 불필요).
+# 따라서 아무 파이썬이나 되지만, 작업 스케줄러 세션에는 PATH 가 빈약할 수 있어
+# 쓸 수 있는 인터프리터를 순서대로 찾는다. -PythonCmd 로 직접 지정도 가능하다.
+function Resolve-Python {
+    foreach ($c in @("python", "py")) {
+        if (Get-Command $c -ErrorAction SilentlyContinue) { return $c }
+    }
+    foreach ($c in @("$env:USERPROFILE\miniconda3\python.exe",
+                     "$env:USERPROFILEnaconda3\python.exe",
+                     "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe")) {
+        if (Test-Path $c) { return $c }
+    }
+    return "conda run -n s1_snappy python"      # 최후 수단
+}
+if (-not $PythonCmd) { $PythonCmd = Resolve-Python }
 $ProjectDir = "f:\06_SAR_system\S1"
-$ScriptPy = Join-Path $ProjectDir "monitor_new_scenes.py"
+# 2026-08-13 패키지 재구성으로 스크립트가 s1/tools/monitor/ 로 옮겨졌다.
+# 이 스크립트는 표준 라이브러리만 쓰고 저장소 모듈을 import 하지 않으므로
+# 파일 경로로 바로 부르면 된다(cwd 와 무관, conda 환경도 필요 없다).
+$ScriptPy = Join-Path $ProjectDir "s1\tools\monitor\monitor_new_scenes.py"
 $FlagFile = Join-Path $ProjectDir "downloads\NEW_SCENES.flag"
 
 Add-Type -AssemblyName System.Windows.Forms | Out-Null

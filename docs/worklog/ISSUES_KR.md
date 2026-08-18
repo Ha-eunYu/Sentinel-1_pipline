@@ -8,7 +8,7 @@
 - 새 이슈는 맨 아래에 번호를 이어 붙인다.
 
 관련: [TODO_KR.md](TODO_KR.md)(할 일) · [PROGRESS_KR.md](PROGRESS_KR.md)(진행상황) ·
-[WORKLOG_20260814_KR.md](WORKLOG_20260814_KR.md)(최근 작업일지)
+[WORKLOG_20260818_KR.md](WORKLOG_20260818_KR.md)(최근 작업일지)
 
 ## GitHub 이슈 번호 대조
 
@@ -365,3 +365,98 @@ key = KEY_RE.search(name).groups()      # ('20250707T092321', '059976')
 
 씬 ID(`s1.core.scene.scene_id`)는 **로컬 파일끼리** 맞출 때만 쓴다. 외부 목록
 (CDSE STAC, NAS 인벤토리)과 대조할 때 쓰면 안 된다.
+
+## #17 🟡 external DEM이 남한 전용 범위라 북한이 통째로 빠진다
+
+### 증상
+
+대상이 남한 → **한반도**로 넓어지자 #13에서 통일 기준으로 정한
+`korea_full_cop30.tif`가 부족해졌다.
+
+```text
+korea_full_cop30.tif    125.0~131.0E, 32.9~39.9N
+북한 최북단                                 약 43.0N   ← DEM 밖 3.1°
+미처리 씬 footprint 실측                    최북 43.57N, 최서 122.03E
+```
+
+**DEM 밖은 RTC 산출물에서 무효(결측)로 남는다.** 이 DEM으로 북한 프레임을
+돌리면 산출물이 **거의 통째로 빈 채로 정상 종료**한다. 로그에 오류가 없어
+산출물을 열어보기 전에는 모른다 — #13과 같은 종류인데 규모가 크다.
+
+### 얼마나 빠지나 — 재고 판단했다
+
+`(footprint ∩ 한반도)` 중 DEM 상자 밖 비율을 씬별로 계산했다(2026-08 로컬 32장).
+
+| 손실 | 씬 수 | 예 |
+| --- | ---: | --- |
+| 100% | 8 | `226A`·`31FB`·`E6FC`·`65AB`·`9A5C`·`B808`·`A54D`·`7AE5` (북한·동해) |
+| 1~80% | 9 | `A949` 80.7% · `524F` 79.0% · `F0C3` 47.2% · `7C24` 17.9% |
+| < 1% | 15 | 남한 궤도 프레임 — **재처리 불필요** |
+
+**교훈: "DEM을 바꿨으니 전부 재처리"는 틀린 반사다.** 이미 처리한 11장은 전부
+손실 1% 미만이라 그대로 뒀다(약 5시간 절약). 판단은 씬별 실측으로 한다.
+
+### 조치
+
+한반도 전역판을 새로 구웠다.
+
+```bash
+python -m s1.tools.dem.make_basin_dem --bounds 123.5,32.8,131.3,43.3 --name korea_peninsula
+# korea_peninsula_cop30.tif  123.50~131.30E 32.80~43.30N  타일 78  1,713 MB
+```
+
+| DEM | 범위 | 용도 |
+| --- | --- | --- |
+| `korea_full_cop30.tif` | 125.0~131.0E, 32.9~39.9N | 남한 전용(제주·울릉 포함) |
+| **`korea_peninsula_cop30.tif`** | **123.5~131.3E, 32.8~43.3N** | **한반도 전역(북한 포함)** |
+
+**확정(2026-08-18)** — **한반도 대상 처리는 전부 `korea_peninsula_cop30.tif`**를
+쓴다. 유역 clip DEM은 유역 단독 분석 전용으로만 남긴다. 규격은
+[PREPROCESSING_SPEC_KR.md](../pipeline/PREPROCESSING_SPEC_KR.md) 1절이 정본이다.
+
+peninsula는 korea_full의 **상위집합**이라(같은 COP30 값·해상도·nodata, 더 넓은
+clip) 남한 산출물에 써도 값이 달라지지 않는다. 그래서 **기존 산출물을 일괄
+재처리할 이유는 없고**, 위 실측처럼 씬별로 북부 결측이 실제로 생겼는지 재서
+필요한 것만 다시 굽는다([TODO_KR.md](TODO_KR.md) P0.5b).
+
+**남은 것** — 산출물에 사용 DEM 기록이 없는 문제는 #13과 동일하게 그대로다.
+
+## #18 🟢 STAC 요약에 footprint가 없어 남한/한반도 판정이 늘 "0장"이었다
+
+### 증상
+
+`download_south_korea_month.py`가 검색 66장을 훑고도 **"남한 걸침 0장 → 받을 것
+0장"** 을 냈다. 실제로는 57장이 남한에 걸쳐 있었다. 오류도 경고도 없이 **"받을
+게 없다"는 정상 종료**라, 수집이 끝난 것으로 착각하기 딱 좋다.
+
+### 원인
+
+`s1/stac/models.py`의 `S1ItemSummary`에 **`geometry` 필드가 없었다.**
+`extract_s1_summary()`가 `item.geometry`를 버리고 `bbox`만 담았다.
+
+```python
+south = []
+for c in seen.values():
+    geom = c.get("geometry")     # ← 항상 None
+    if not geom:
+        continue                 # ← 전부 여기서 탈락
+```
+
+bbox로 판정하면 기울어진 스와스의 빈 삼각형까지 육지로 세기 때문에
+(SCENE_FOOTPRINT_REAUDIT) 일부러 footprint로 판정하게 해뒀는데, **정작 그
+데이터가 요약 dict에 실려 오지 않았다.**
+
+### 조치
+
+```python
+# models.py — S1ItemSummary
+geometry: Optional[Dict[str, Any]] = None      # 실제 촬영 footprint
+
+# search_s1.py — extract_s1_summary()
+geometry=getattr(item, "geometry", None),
+```
+
+고친 뒤 같은 명령이 남한 걸침 **57장**을 정상 판정했다.
+
+> **일반 규칙**: 판정 로직이 "해당 없음 0건"을 낼 때는 **입력이 비어서인지
+> 조건이 맞아서인지**를 먼저 가른다. 두 경우가 같은 출력으로 보인다.
