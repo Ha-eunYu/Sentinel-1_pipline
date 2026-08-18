@@ -109,10 +109,16 @@ def scene_key(name: str) -> tuple[str, str] | None:
     return (m.group(1), k.orbit)
 
 
-def sid_label(name: str) -> str:
-    """위성 + 씬 ID (예: `S1C D635`). 문서·명령에서 씬을 부르는 이름이다."""
+def sat_label(name: str) -> str:
+    """위성(S1A~S1D). 표마다 같은 자리·같은 이름의 칸으로 쓴다."""
     k = parse_scene(name)
-    return f"{k.platform} {k.sid}" if k else "-"
+    return k.platform if k else "-"
+
+
+def sid_label(name: str) -> str:
+    """씬 ID 4hex(예: `D635`). 문서·명령에서 씬을 부르는 이름이다."""
+    k = parse_scene(name)
+    return k.sid if k else "-"
 
 
 def kst_of(name: str) -> str:
@@ -278,6 +284,7 @@ def merge_rows(cdse: list[dict], st: LocalState, days: int) -> list[dict]:
         rows.append({
             "key": key,
             "when": r["datetime"],
+            "sat": sat_label(name),
             "sid": sid_label(name),
             "rel": r["rel"],
             "orbit": f"rel{r['rel'] or '?'} {r['dir']}".strip(),
@@ -302,6 +309,7 @@ def merge_rows(cdse: list[dict], st: LocalState, days: int) -> list[dict]:
         rows.append({
             "key": key,
             "when": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "sat": sat_label(name) if name else "-",
             "sid": sid_label(name) if name else "-",
             "rel": None, "orbit": "-", "where": "-", "overlap": None,
             "size": st.size_of(key),
@@ -322,6 +330,7 @@ STATE_RANK = {"미수신": 0, "받는중": 1, "대기": 2, "전처리중": 3, "�
 # 정렬한다 — "1.12 GB"를 문자열로 세우면 9 GB가 10 GB보다 뒤로 간다.
 SCENE_SORT = {
     "time": lambda row: row["raw"]["when"],
+    "sat": lambda row: row["raw"]["sat"],
     "sid": lambda row: row["raw"]["sid"],
     "orbit": lambda row: (row["raw"]["rel"] if isinstance(row["raw"]["rel"], int)
                           else -1),
@@ -334,13 +343,15 @@ SCENE_SORT = {
 
 PROC_SORT = {
     "st": lambda row: STATE_RANK.get(row["state"], 9),
+    "sat": lambda row: row["sat"],
     "sid": lambda row: row["sid"],
     "time": lambda row: row["obs"],
 }
 
 PLAN_SORT = {
     "time": lambda row: row["raw"]["begin"],
-    "sat": lambda row: (row["raw"]["sat"], int(row["raw"]["rel"] or 0)),
+    "sat": lambda row: row["raw"]["sat"],
+    "orbit": lambda row: int(row["raw"]["rel"] or 0),
     "where": lambda row: row["raw"]["where"],
     "cover": lambda row: row["raw"]["cover_pct"],
     "dams": lambda row: len(row["raw"]["dams"]),
@@ -395,26 +406,30 @@ def gb(size: int) -> str:
 
 # --- 콘솔 출력(--once) -------------------------------------------------------
 
-def plan_rows_for_once(args) -> list[dict]:
+def plan_rows_for_once(args) -> tuple[list[dict], str]:
     """`--once`용 촬영 계획. 캐시가 `--plan-hours`보다 오래됐을 때만 새로 뽑는다.
 
     계획 조회는 KML 6 MB를 받아 훑는 일이라 10초 남짓 걸린다. 콘솔에서 상태만
     보려는데 매번 그걸 하게 두지 않는다.
     """
+    def cached() -> tuple[list[dict], str]:
+        c = acquisition_plan.load_cache()
+        return c.get("rows", []), c.get("until", "")
+
     if args.plan_hours <= 0:
-        return []
+        return [], ""
     cache_path = acquisition_plan.PLAN_CACHE
     fresh = (cache_path.exists()
              and time.time() - cache_path.stat().st_mtime < args.plan_hours * 3600)
     if fresh:
-        return acquisition_plan.load_cache().get("rows", [])
+        return cached()
     try:
-        rows = acquisition_plan.korea_passes(days=args.plan_days)
-        acquisition_plan.save_cache(rows, datetime.now(KST).strftime("%m-%d %H:%M"))
-        return rows
+        result = acquisition_plan.korea_passes(days=args.plan_days)
+        acquisition_plan.save_cache(result, datetime.now(KST).strftime("%m-%d %H:%M"))
+        return result.rows, result.until
     except Exception as e:                                   # noqa: BLE001
         print(f"  (촬영계획 조회 실패: {e} — 캐시를 씁니다)", file=sys.stderr)
-        return acquisition_plan.load_cache().get("rows", [])
+        return cached()
 
 
 
@@ -433,22 +448,24 @@ def render_text(rows: list[dict], st: LocalState, fetched: str, args) -> str:
     if not merged:
         add("  (조회창 안에 한반도 촬영이 없습니다)")
     else:
-        add(f"  {'촬영(KST)':<12} {'씬':<9} {'궤도':<10} {'위치':<22} "
+        add(f"  {'촬영(KST)':<12} {'위성':<5} {'씬':<6} {'궤도':<10} {'위치':<22} "
             f"{'한반도':>6} {'크기':>9}  상태")
     for r in merged[:args.scene_rows]:
         ov = f"{r['overlap']:.1f}%" if r["overlap"] is not None else "-"
         size = gb(r["size"]) if r["size"] else "-"
-        add(f"  {kst_hm(r['when']):<12} {r['sid']:<9} {r['orbit']:<10} "
-            f"{r['where']:<22} {ov:>6} {size:>9}  {r['state']}")
+        add(f"  {kst_hm(r['when']):<12} {r['sat']:<5} {r['sid']:<6} "
+            f"{r['orbit']:<10} {r['where']:<22} {ov:>6} {size:>9}  {r['state']}")
 
     add("")
-    plan = plan_rows_for_once(args)
-    add(f"■ 촬영 예정 {args.plan_days}일 (ESA 계획) — {len(plan)}건")
-    if not plan:
-        add("  (계획 없음 — 계획 파일이 아직 그 기간을 안 덮을 수도 있다)")
-    for p in plan:
+    plan, until = plan_rows_for_once(args)
+    add(f"■ 촬영 예정 {args.plan_days}일 (ESA 계획) — {len(plan)}건"
+        + (f" · 계획은 {acquisition_plan.kst_str(until)} KST 까지" if until else ""))
+    if not plan and args.plan_hours > 0:
+        add("  (그 기간에 한반도 통과 없음 — 계획이 덮는 끝을 위에서 확인할 것)")
+    for p in plan[:args.plan_rows]:
         dams = f"  댐·보 {len(p['dams'])}곳" if p["dams"] else ""
-        add(f"  {acquisition_plan.kst_str(p['begin'])} KST  {p['sat']} rel{p['rel']:>3}  "
+        add(f"  {acquisition_plan.kst_str(p['begin'])} KST  {p['sat']} "
+            f"rel{p['rel']:>3} {p.get('dir', '')}  "
             f"{p['where'] or '-':<22} 한반도 {p['cover_pct']:>5.1f}%{dams}")
 
     add("")
@@ -493,6 +510,7 @@ class Dashboard:
         self.sort: dict = {}           # 표 -> (열, 내림차순) — 없으면 기본 순서
         self.plan: list[dict] = []     # 촬영 예정(ESA 계획 KML)
         self.plan_fetched = "-"
+        self.plan_until = ""           # 계획이 덮는 끝(UTC ISO)
         self.next_plan = 0.0
 
         cache = load_cache()
@@ -500,8 +518,9 @@ class Dashboard:
             self.rows = cache["rows"]
             self.fetched = cache.get("fetched", "-") + " (캐시)"
         plan_cache = acquisition_plan.load_cache()
-        if plan_cache.get("rows"):
+        if plan_cache.get("rows") is not None:
             self.plan = plan_cache["rows"]
+            self.plan_until = plan_cache.get("until", "")
             self.plan_fetched = plan_cache.get("fetched", "-") + " (캐시)"
 
         self.root = tk.Tk()
@@ -541,27 +560,28 @@ class Dashboard:
         # 촬영 하나당 한 줄 — 카탈로그(궤도·위치)와 로컬(크기·상태)을 한 표에서.
         self.tv_scene = self._table(
             "최근 촬영",
-            [("time", "촬영(KST)", 86), ("sid", "씬", 72), ("orbit", "궤도", 74),
-             ("where", "위치", 118), ("ov", "한반도", 52, "e"),
-             ("size", "크기", 62, "e"), ("st", "상태", 58)],
+            [("time", "촬영(KST)", 84), ("sat", "위성", 46), ("sid", "씬", 50),
+             ("orbit", "궤도", 74), ("where", "위치", 116),
+             ("ov", "한반도", 50, "e"), ("size", "크기", 60, "e"),
+             ("st", "상태", 58)],
             args.scene_rows, grow=False,
-            sortable=("time", "sid", "orbit", "where", "ov", "size", "st"))
+            sortable=("time", "sat", "sid", "orbit", "where", "ov", "size", "st"))
         # 앞으로 찍을 것 — 카탈로그가 아니라 ESA 촬영계획 KML 이 출처다.
         self.tv_plan = self._table(
             "촬영 예정 (ESA 계획)",
-            [("time", "예정(KST)", 86), ("sat", "위성·궤도", 90),
-             ("where", "위치", 180), ("cover", "한반도", 52, "e"),
-             ("dams", "댐·보", 52, "e")],
+            [("time", "촬영(KST)", 84), ("sat", "위성", 46), ("orbit", "궤도", 74),
+             ("where", "위치", 166), ("cover", "한반도", 50, "e"),
+             ("dams", "댐·보", 50, "e")],
             args.plan_rows, grow=False,
-            sortable=("time", "sat", "where", "cover", "dams"))
+            sortable=("time", "sat", "orbit", "where", "cover", "dams"))
         # 위 표와 같은 순서·같은 이름으로 — 두 표를 눈으로 잇는 것은 씬 이름이다.
         # '비고'는 줄마다 담는 값이 달라(경과·크기·완료시각) 정렬 대상이 아니다.
         self.tv_proc = self._table(
             "전처리",
-            [("st", "상태", 58), ("sid", "씬", 72), ("time", "촬영(KST)", 86),
-             ("info", "비고", 160)],
+            [("time", "촬영(KST)", 84), ("sat", "위성", 46), ("sid", "씬", 50),
+             ("st", "상태", 58), ("info", "비고", 190)],
             args.proc_rows, grow=True,
-            sortable=("st", "sid", "time"))
+            sortable=("time", "sat", "sid", "st"))
 
         for tv in (self.tv_scene, self.tv_plan, self.tv_proc):
             tv.tag_configure("hot", foreground="#c62828")     # 손 볼 것(중단?)
@@ -667,10 +687,10 @@ class Dashboard:
             if self.args.plan_hours > 0 and time.time() >= self.next_plan:
                 self.next_plan = time.time() + self.args.plan_hours * 3600
                 try:
-                    rows = acquisition_plan.korea_passes(days=self.args.plan_days)
+                    result = acquisition_plan.korea_passes(days=self.args.plan_days)
                     stamp = datetime.now(KST).strftime("%m-%d %H:%M")
-                    acquisition_plan.save_cache(rows, stamp)
-                    self.q.put(("plan", (rows, stamp)))
+                    acquisition_plan.save_cache(result, stamp)
+                    self.q.put(("plan", (result.rows, stamp, result.until)))
                 except Exception as e:                       # noqa: BLE001
                     self.q.put(("error", f"촬영계획 조회 실패: {e}"))
                     self.next_plan = time.time() + 600
@@ -706,7 +726,7 @@ class Dashboard:
                 elif kind == "cdse":
                     self.rows, self.fetched = payload
                 elif kind == "plan":
-                    self.plan, self.plan_fetched = payload
+                    self.plan, self.plan_fetched, self.plan_until = payload
                 elif kind == "busy":
                     self.busy_cdse = payload
                 elif kind == "error":
@@ -749,7 +769,7 @@ class Dashboard:
         # 최근 촬영 — 카탈로그와 로컬을 한 줄로 -------------------------------
         scene_rows = [{
             "tag": self.TAGS.get(r["state"], ""), "name": r["name"], "raw": r,
-            "values": (kst_hm(r["when"]), r["sid"], r["orbit"], r["where"],
+            "values": (kst_hm(r["when"]), r["sat"], r["sid"], r["orbit"], r["where"],
                        f"{r['overlap']:.0f}%" if r["overlap"] is not None else "-",
                        gb(r["size"]) if r["size"] else "-", r["state"]),
         } for r in merged[:self.args.scene_rows * 4]]
@@ -765,17 +785,20 @@ class Dashboard:
         # 촬영 예정 ------------------------------------------------------------
         plan_rows = [{
             "tag": "plan", "name": "", "raw": p,
-            "values": (acquisition_plan.kst_str(p["begin"]),
-                       f"{p['sat']} rel{p['rel']}", p["where"] or "-",
-                       f"{p['cover_pct']:.0f}%",
+            "values": (acquisition_plan.kst_str(p["begin"]), p["sat"],
+                       f"rel{p['rel']} {p.get('dir', '')}".strip(),
+                       p["where"] or "-", f"{p['cover_pct']:.0f}%",
                        str(len(p["dams"])) if p["dams"] else "-"),
         } for p in self.plan]
 
         self.tv_plan.delete(*self.tv_plan.get_children())
         if not plan_rows:
+            # 계획이 어디까지 덮는지 같이 적는다 — 그게 없으면 "통과 없음"과
+            # "계획이 아직 안 나옴"이 똑같아 보인다.
+            until = (f"계획은 {acquisition_plan.kst_str(self.plan_until)} KST 까지"
+                     if self.plan_until else "계획을 아직 못 받았다")
             self._insert(self.tv_plan, "none", "",
-                         ("", "", f"앞으로 {self.args.plan_days}일 계획 없음"
-                          " (계획 파일이 아직 그 기간을 안 덮을 수 있다)", "", ""))
+                         ("", "", "", f"예정 없음 — {until}", "", ""))
         for row in self._sorted(self.tv_plan, plan_rows, PLAN_SORT):
             self._insert(self.tv_plan, row["tag"], row["name"], row["values"])
 
@@ -806,8 +829,10 @@ class Dashboard:
     def _proc_row(state: str, name: str, tag: str, info: str) -> dict:
         key = scene_key(name)
         return {"tag": tag, "name": name, "state": state,
-                "sid": sid_label(name), "obs": key[0] if key else "",
-                "values": (state, sid_label(name), kst_of(name), info)}
+                "sat": sat_label(name), "sid": sid_label(name),
+                "obs": key[0] if key else "",
+                "values": (kst_of(name), sat_label(name), sid_label(name),
+                           state, info)}
 
     def _insert(self, tv, tag: str, name: str, values) -> None:
         """줄 하나 추가 + 더블클릭 복사용으로 씬 파일명을 기억해 둔다."""

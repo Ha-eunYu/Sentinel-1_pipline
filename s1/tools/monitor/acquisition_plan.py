@@ -40,6 +40,7 @@ import sys
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import NamedTuple
 from xml.etree import ElementTree as ET
 
 PROJECT_DIR = Path(__file__).resolve().parents[3]
@@ -80,7 +81,27 @@ def plan_links(timeout: int = 60) -> dict[str, tuple[str, datetime, datetime]]:
         # 계획은 겹쳐 가며 여러 번 올라온다 — 시작이 가장 늦은 것이 최신 판이다.
         if sat not in best or t0 > best[sat][1]:
             best[sat] = (url, t0, t1)
+
+    # 링크를 HTML에서 정규식으로 긁는다. ESA가 페이지 구조나 파일명 규칙을 바꾸면
+    # 여기서 0개가 되는데, 그대로 두면 "예정 없음"으로 보여 **촬영이 없는 것과
+    # 구별되지 않는다.** 그래서 조용히 빈 목록을 돌려주지 않고 소리내어 실패한다
+    # (창은 이 메시지를 상태줄에 띄우고, CLI 는 그대로 죽는다).
+    if not best:
+        raise RuntimeError(
+            f"계획 링크를 찾지 못했습니다({len(html):,}바이트 응답). ESA 페이지 "
+            f"구조나 파일명 규칙이 바뀌었을 수 있습니다 — LINK_RE 를 확인하세요: "
+            f"{PLAN_PAGE}")
     return best
+
+
+def orbit_dir(begin: datetime) -> str:
+    """상행/하행. 계획 KML에는 이 값이 없어 **관측 시각으로** 판정한다.
+
+    Sentinel-1은 태양동기 궤도라 지역시각이 고정이다 — 한반도 경도에서 상승
+    궤도는 KST 18시대, 하강 궤도는 KST 06시대에 지난다
+    (ORBIT_CALENDAR_202607_08_KR.md 1-1절의 환산표와 같은 규칙).
+    """
+    return "상행" if begin.astimezone(KST).hour >= 12 else "하행"
 
 
 def download_plan(url: str, out_dir: Path = PLAN_DIR, timeout: int = 180) -> Path:
@@ -192,12 +213,24 @@ class KoreaGrid:
         return pct, names
 
 
+class PlanResult(NamedTuple):
+    """`korea_passes` 결과. `until`을 같이 돌려주는 이유는 아래 참고."""
+
+    rows: list[dict]
+    until: str          # 계획 파일이 덮는 마지막 시각(UTC ISO). 없으면 ""
+    plans: dict         # {'s1c': (파일명, 시작, 끝)} — 어떤 판을 봤는지
+
+
 def korea_passes(days: int = 7, mode: str = "IW", step: float = 0.1,
-                 bbox: list[float] | None = None,
-                 refresh: bool = False) -> list[dict]:
+                 bbox: list[float] | None = None) -> PlanResult:
     """앞으로 `days`일 안에 한반도를 지나는 계획 datatake 목록(가까운 순).
 
-    각 항목: 시작·끝(UTC), 위성, 상대궤도, 시도 이름, 포함되는 댐·보 이름.
+    각 항목: 시작·끝(UTC), 위성, 상대궤도, 상행/하행, 시도 이름, 댐·보 이름.
+
+    **`until`(계획이 덮는 끝)을 같이 돌려준다.** 계획 파일은 약 3주치라
+    `--days 30`을 줘도 그 뒤는 알 수 없는데, 결과만 보면 "예정 없음"과
+    "계획이 아직 없음"이 똑같이 빈 목록으로 보인다. 둘을 구별하려면 호출한
+    쪽이 이 값을 같이 보여 줘야 한다.
     """
     bbox = bbox or KOREA_BBOX
     boundary = Boundary(load_rings(KOREA_PENINSULA)) if KOREA_PENINSULA.exists() else None
@@ -209,10 +242,14 @@ def korea_passes(days: int = 7, mode: str = "IW", step: float = 0.1,
     until = now + timedelta(days=days)
     rows: list[dict] = []
 
-    for sat, (url, _t0, _t1) in sorted(plan_links().items()):
+    links = plan_links()
+    plans: dict = {}
+    for sat, (url, t0, t1) in sorted(links.items()):
         if sat == "s1a":
             continue                       # 2026-06-29 퇴역
-        path = download_plan(url) if not refresh else download_plan(url)
+        path = download_plan(url)
+        plans[sat] = (path.name, t0.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                      t1.strftime("%Y-%m-%dT%H:%M:%SZ"))
         for dt in parse_plan(path):
             if mode and dt["mode"] != mode:
                 continue
@@ -234,19 +271,26 @@ def korea_passes(days: int = 7, mode: str = "IW", step: float = 0.1,
                 "begin": begin.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "end": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "sat": dt["sat"], "rel": dt["rel"], "abs": dt["abs"],
+                "dir": orbit_dir(begin),
                 "pol": dt["pol"], "datatake": dt["datatake"],
                 "where": where, "cover_pct": round(pct, 1),
                 "dams": dams,
             })
 
     rows.sort(key=lambda r: r["begin"])
-    return rows
+    # 계획이 덮는 끝은 위성별 끝 중 **가장 이른 것**이다 — 그 뒤로는 한쪽
+    # 위성만 알고 있어 "예정 없음"이라고 말할 수 없다.
+    ends = [v[2] for v in plans.values()]
+    return PlanResult(rows, min(ends) if ends else "", plans)
 
 
-def save_cache(rows: list[dict], fetched: str) -> None:
+def save_cache(result: "PlanResult", fetched: str) -> None:
     try:
         PLAN_CACHE.parent.mkdir(parents=True, exist_ok=True)
-        PLAN_CACHE.write_text(json.dumps({"fetched": fetched, "rows": rows},
+        PLAN_CACHE.write_text(json.dumps({"fetched": fetched,
+                                          "until": result.until,
+                                          "plans": result.plans,
+                                          "rows": result.rows},
                                          ensure_ascii=False, indent=1),
                               encoding="utf-8")
     except Exception:                                        # noqa: BLE001
@@ -285,23 +329,28 @@ def main() -> int:
     except Exception:                                        # noqa: BLE001
         pass
 
-    rows = korea_passes(days=args.days, mode=args.mode, step=args.step)
-    if args.dams_only:
-        rows = [r for r in rows if r["dams"]]
-    save_cache(rows, datetime.now(KST).strftime("%m-%d %H:%M"))
+    result = korea_passes(days=args.days, mode=args.mode, step=args.step)
+    rows = [r for r in result.rows if r["dams"]] if args.dams_only else result.rows
+    save_cache(result, datetime.now(KST).strftime("%m-%d %H:%M"))
 
     if args.json:
-        print(json.dumps(rows, ensure_ascii=False, indent=1))
+        print(json.dumps({"until": result.until, "plans": result.plans,
+                          "rows": rows}, ensure_ascii=False, indent=1))
         return 0
 
     print(f"■ 앞으로 {args.days}일 한반도 촬영 계획 — {len(rows)}건 "
           f"(ESA 계획 KML, 갱신 {datetime.now(KST):%m-%d %H:%M} KST)")
-    if not rows:
-        print("  (계획에 없음 — 계획 파일이 그 기간을 아직 안 덮을 수도 있다)")
     for r in rows:
         dams = f"  댐·보 {len(r['dams'])}곳: {', '.join(r['dams'][:4])}" if r["dams"] else ""
-        print(f"  {kst_str(r['begin'])} KST  {r['sat']} rel{r['rel']:>3}  "
+        print(f"  {kst_str(r['begin'])} KST  {r['sat']} rel{r['rel']:>3} {r['dir']}  "
               f"{r['where'] or '-':<22} 한반도 {r['cover_pct']:>5.1f}%{dams}")
+
+    # 계획이 어디까지 덮는지 반드시 같이 말한다 — 안 그러면 "예정 없음"과
+    # "계획이 아직 안 나옴"이 똑같이 빈 목록으로 보인다.
+    for sat, (fname, _t0, t1) in sorted(result.plans.items()):
+        print(f"\n  {sat.upper()} 계획: {kst_str(t1)} KST 까지  ({fname})")
+    if not rows:
+        print("  → 위 기간 안에는 한반도 통과가 없다. 그 뒤는 계획이 아직 없다.")
     print("\n⚠ 계획은 수시로 바뀐다. 촬영 후 카탈로그 등재까지 3~6시간 더 걸린다.")
     return 0
 
