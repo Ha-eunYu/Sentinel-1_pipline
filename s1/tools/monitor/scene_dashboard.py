@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
 """한반도 Sentinel-1 파이프라인 **현황 창** — 회사 PC에 띄워 두는 작은 대시보드.
 
-한 화면에서 다음을 본다.
+표 두 개로 본다.
 
-1. **CDSE 최신 촬영** — 최근 며칠간 Copernicus 카탈로그에 올라온 한반도 프레임.
-   관측시각(KST), 상대궤도·상승/하강, **대략적인 위치(충남·전남 …)**, 한반도
-   겹침%, 그리고 **이 PC에서의 처리 단계**.
-2. **이 PC의 진행 상황** — 최근 다운로드 / 받는 중(.part) / 전처리 대기 /
-   전처리 중 / 전처리 완료.
+1. **최근 촬영** — 최근 며칠간 Copernicus 카탈로그에 올라온 한반도 프레임을
+   **촬영 하나당 한 줄**로. 관측시각(KST), 상대궤도·상승/하강, **대략적인
+   위치(충남·전남 …)**, 한반도 겹침%, 원본 크기, 그리고 이 PC에서의 단계
+   (미수신 → 받는중 → 대기 → 전처리중 → 완료).
+2. **전처리** — 지금 굽는 씬(경과·기록된 GB), 대기 목록, 최근 완료.
+
+카탈로그와 다운로드를 표 두 개로 나눠 두면 같은 촬영이 양쪽에 나와 눈이 두 번
+간다. 어차피 둘을 잇는 것은 촬영시각이라 한 줄로 합치고, "어디까지 왔나"는
+`상태` 칸 하나로 말한다.
 
 감시 도구([monitor_new_scenes.py](monitor_new_scenes.py))는 "새 게 올라왔다"를
 **알림 한 번**으로 알려 준다. 이 대시보드는 그 다음 질문 — "그래서 지금 어디까지
@@ -104,14 +108,30 @@ def scene_key(name: str) -> tuple[str, str] | None:
     return (m.group(1), k.orbit)
 
 
-def short_id(name: str) -> str:
-    """표시용 짧은 이름: 위성 + 촬영시각(KST) + 씬ID (예: `S1C 08-07 06:39 0868`)."""
+def sid_label(name: str) -> str:
+    """위성 + 씬 ID (예: `S1C D635`). 문서·명령에서 씬을 부르는 이름이다."""
     k = parse_scene(name)
+    return f"{k.platform} {k.sid}" if k else "-"
+
+
+def kst_of(name: str) -> str:
+    """파일명에서 촬영시각을 KST `MM-DD HH:MM`으로."""
     m = START_RE.search(name)
-    if not k or not m:
-        return name[:28]
+    if not m:
+        return "-"
     dt = datetime.strptime(m.group(1), "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
-    return f"{k.platform} {dt.astimezone(KST):%m-%d %H:%M} {k.sid}"
+    return f"{dt.astimezone(KST):%m-%d %H:%M}"
+
+
+def short_id(name: str) -> str:
+    """표시용 짧은 이름: 위성 + 촬영시각(KST) + 씬ID (예: `S1C 08-07 06:39 0868`).
+
+    콘솔(--once) 전용이다. 창에서는 씬·촬영시각을 각각의 칸에 나눠 적는다.
+    """
+    k = parse_scene(name)
+    if not k:
+        return name[:28]
+    return f"{k.platform} {kst_of(name)} {k.sid}"
 
 
 # --- 대략적인 위치(시도) -----------------------------------------------------
@@ -217,7 +237,7 @@ class LocalState:
     zips: dict = field(default_factory=dict)        # key -> (Path, mtime, size)
     outs: dict = field(default_factory=dict)        # key -> (Path, mtime, size)
     busy: dict = field(default_factory=dict)        # key -> (파일명, 시작시각, stale)
-    parts: list = field(default_factory=list)       # [(Path, mtime, size)]
+    parts: dict = field(default_factory=dict)       # key -> (Path, mtime, size)
     gpt_procs: int = 0                              # -1 = 확인 실패
     scanned: float = 0.0
 
@@ -228,7 +248,17 @@ class LocalState:
             return "완료"
         if key in self.zips:
             return "대기"
+        if key in self.parts:
+            return "받는중"
         return "미수신"
+
+    def size_of(self, key) -> int | None:
+        """원본 zip 크기. 받는 중이면 지금까지 받은 크기."""
+        if key in self.zips:
+            return self.zips[key][2]
+        if key in self.parts:
+            return self.parts[key][2]
+        return None
 
 
 def gpt_process_count() -> int:
@@ -254,8 +284,10 @@ def scan_local(out_dir: Path, out_suffix: str, stale_minutes: int = 30) -> Local
                 s = z.stat()
                 st.zips[key] = (z, s.st_mtime, s.st_size)
         for p in GRD_DIR.glob("*.part"):
-            s = p.stat()
-            st.parts.append((p, s.st_mtime, s.st_size))
+            key = scene_key(p.name)
+            if key:
+                s = p.stat()
+                st.parts[key] = (p, s.st_mtime, s.st_size)
 
     if out_dir.exists():
         for t in out_dir.glob(f"*{out_suffix}.tif"):
@@ -317,6 +349,62 @@ def fetch_cdse(days: int, collection: str, min_overlap: float,
     return rows
 
 
+def merge_rows(cdse: list[dict], st: LocalState, days: int) -> list[dict]:
+    """CDSE 목록과 로컬 보유분을 **씬 하나당 한 줄**로 합친다.
+
+    카탈로그와 다운로드를 표 두 개로 나눠 두면 같은 촬영이 양쪽에 나와 눈이 두
+    번 간다. 어차피 두 표를 잇는 것은 촬영시각이므로 한 줄에 합치고 `상태`
+    칸으로 어디까지 왔는지를 말한다.
+
+    CDSE에 없는데 로컬에는 있는 씬(조회 실패, 또는 카탈로그에서 내려간 옛 제품)도
+    조회창 안이면 끼워 넣는다. 그런 줄은 궤도·위치를 알 수 없어 `-`로 둔다.
+    """
+    rows: list[dict] = []
+    seen: set = set()
+    for r in cdse:
+        key = scene_key(r["id"])
+        seen.add(key)
+        zip_path = st.zips.get(key)
+        # 이름은 로컬 파일이 있으면 그쪽을 쓴다 — 재처리본이면 씬 ID 4hex가
+        # 카탈로그와 다를 수 있고, 명령에 붙여 넣을 것은 손에 있는 파일이다.
+        name = zip_path[0].name if zip_path else r["id"]
+        rows.append({
+            "key": key,
+            "when": r["datetime"],
+            "sid": sid_label(name),
+            "orbit": f"rel{r['rel'] or '?'} {r['dir']}".strip(),
+            "where": r["where"] or "-",
+            "overlap": r["overlap"],
+            "size": st.size_of(key),
+            "state": st.state_of(key),
+            "name": name,
+        })
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    local_keys = set(st.zips) | set(st.parts) | set(st.outs) | set(st.busy)
+    for key in local_keys - seen:
+        try:
+            dt = datetime.strptime(key[0], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if dt < cutoff:
+            continue                       # 조회창 밖 — 전처리 표에서 본다
+        src = st.zips.get(key) or st.parts.get(key) or st.outs.get(key)
+        name = src[0].name if src else ""
+        rows.append({
+            "key": key,
+            "when": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "sid": sid_label(name) if name else "-",
+            "orbit": "-", "where": "-", "overlap": None,
+            "size": st.size_of(key),
+            "state": st.state_of(key),
+            "name": name,
+        })
+
+    rows.sort(key=lambda r: r["when"], reverse=True)
+    return rows
+
+
 def load_cache() -> dict:
     try:
         return json.loads(CACHE_PATH.read_text(encoding="utf-8"))
@@ -369,26 +457,24 @@ def render_text(rows: list[dict], st: LocalState, fetched: str, args) -> str:
     out: list[str] = []
     add = out.append
 
-    n_new = sum(1 for r in rows if st.state_of(scene_key(r["id"])) == "미수신")
+    merged = merge_rows(rows, st, args.days)
+    n_new = sum(1 for r in merged if r["state"] == "미수신")
     busy = [k for k in st.busy if not st.busy[k][2]]
     stalled = [k for k in st.busy if st.busy[k][2]]
     pending = [k for k in st.zips if k not in st.outs and k not in st.busy]
 
-    add(f"■ CDSE 최근 {args.days}일 (조회 {fetched}) — {len(rows)}개, 미수신 {n_new}")
-    for r in rows[:args.cdse_rows]:
-        key = scene_key(r["id"])
-        add(f"  {kst_hm(r['datetime'])} KST  rel{str(r['rel'] or '?'):>3} {r['dir']}"
-            f"  {r['where'] or '-':<12} 한반도 {r['overlap']:>5.1f}%  "
-            f"{st.state_of(key)}")
-
-    add("")
-    add(f"■ 다운로드 — 보유 {len(st.zips)}개"
-        + (f", 받는 중 {len(st.parts)}개" if st.parts else ""))
-    for p, mtime, size in sorted(st.parts, key=lambda x: -x[1]):
-        add(f"  받는중  {short_id(p.name)}  {gb(size)}  ({ago(mtime)} 갱신)")
-    recent = sorted(st.zips.items(), key=lambda kv: -kv[1][1])[:args.local_rows]
-    for key, (path, mtime, size) in recent:
-        add(f"  {ago(mtime):>8}  {short_id(path.name)}  {gb(size)}  {st.state_of(key)}")
+    add(f"■ 최근 촬영 {args.days}일 (CDSE 조회 {fetched}) — {len(merged)}개, "
+        f"미수신 {n_new} · 보유 {len(st.zips)}")
+    if not merged:
+        add("  (조회창 안에 한반도 촬영이 없습니다)")
+    else:
+        add(f"  {'촬영(KST)':<12} {'씬':<9} {'궤도':<10} {'위치':<22} "
+            f"{'한반도':>6} {'크기':>9}  상태")
+    for r in merged[:args.scene_rows]:
+        ov = f"{r['overlap']:.1f}%" if r["overlap"] is not None else "-"
+        size = gb(r["size"]) if r["size"] else "-"
+        add(f"  {kst_hm(r['when']):<12} {r['sid']:<9} {r['orbit']:<10} "
+            f"{r['where']:<22} {ov:>6} {size:>9}  {r['state']}")
 
     add("")
     add(f"■ 전처리({rel(args.out_dir)}) — 대기 {len(pending)} · 처리중 {len(busy)}"
@@ -401,9 +487,9 @@ def render_text(rows: list[dict], st: LocalState, fetched: str, args) -> str:
         written = gb(out_tif.stat().st_size) if out_tif.exists() else "-"
         add(f"  {'중단?' if stale else '처리중'}  {short_id(name)}  "
             f"{ago(started)} 시작 · {written} 기록")
-    for key in sorted(pending, key=lambda k: k[0], reverse=True)[:args.local_rows]:
+    for key in sorted(pending, key=lambda k: k[0], reverse=True)[:args.proc_rows]:
         add(f"  대기    {short_id(st.zips[key][0].name)}")
-    done = sorted(st.outs.items(), key=lambda kv: -kv[1][1])[:args.local_rows]
+    done = sorted(st.outs.items(), key=lambda kv: -kv[1][1])[:args.proc_rows]
     for key, (path, mtime, size) in done:
         add(f"  완료    {short_id(path.name)}  {gb(size)}  ({ago(mtime)})")
     return "\n".join(out)
@@ -427,6 +513,7 @@ class Dashboard:
         self.fetched = "-"
         self.next_cdse = 0.0
         self.busy_cdse = False
+        self.names: dict = {}          # (표, 줄) -> 씬 파일명 (더블클릭 복사용)
 
         cache = load_cache()
         if cache.get("rows"):
@@ -456,8 +543,9 @@ class Dashboard:
         top.pack(fill="x")
         self.status = ttk.Label(top, text="시작 중…")
         self.status.pack(side="left")
-        ttk.Button(top, text="새로고침", width=8,
-                   command=self.refresh_now).pack(side="right")
+        self.btn_refresh = ttk.Button(top, text="새로고침", width=8,
+                                      command=self.refresh_now)
+        self.btn_refresh.pack(side="right")
         self.var_top = tk.BooleanVar(value=args.topmost)
         ttk.Checkbutton(top, text="항상 위", variable=self.var_top,
                         command=lambda: self.root.attributes(
@@ -466,44 +554,65 @@ class Dashboard:
         self.summary = ttk.Label(self.root, text="", padding=(8, 2))
         self.summary.pack(fill="x")
 
-        self.tv_cdse = self._table(
-            "CDSE 최근 촬영",
-            [("time", "촬영(KST)", 92), ("orbit", "궤도", 74),
-             ("where", "위치", 116), ("ov", "한반도", 54), ("st", "상태", 62)],
-            args.cdse_rows)
-        self.tv_down = self._table(
-            "이 PC 다운로드",
-            [("when", "받은 때", 96), ("scene", "씬", 152),
-             ("size", "크기", 66), ("st", "상태", 62)],
-            args.local_rows)
+        # 촬영 하나당 한 줄 — 카탈로그(궤도·위치)와 로컬(크기·상태)을 한 표에서.
+        self.tv_scene = self._table(
+            "최근 촬영",
+            [("time", "촬영(KST)", 86), ("sid", "씬", 72), ("orbit", "궤도", 74),
+             ("where", "위치", 118), ("ov", "한반도", 52, "e"),
+             ("size", "크기", 62, "e"), ("st", "상태", 58)],
+            args.scene_rows, grow=False)
+        # 위 표와 같은 순서·같은 이름으로 — 두 표를 눈으로 잇는 것은 씬 이름이다.
         self.tv_proc = self._table(
             "전처리",
-            [("st", "상태", 62), ("scene", "씬", 152),
-             ("info", "비고", 152)],
-            args.local_rows + 4)
+            [("st", "상태", 58), ("sid", "씬", 72), ("time", "촬영(KST)", 86),
+             ("info", "비고", 160)],
+            args.proc_rows, grow=True)
 
-        for tv in (self.tv_cdse, self.tv_down, self.tv_proc):
-            tv.tag_configure("hot", foreground="#b00020")     # 손 볼 것
+        for tv in (self.tv_scene, self.tv_proc):
+            tv.tag_configure("hot", foreground="#c62828")     # 손 볼 것(중단?)
+            tv.tag_configure("new", foreground="#b06000")     # 아직 안 받은 것
             tv.tag_configure("run", foreground="#0057b8")     # 진행 중
             tv.tag_configure("done", foreground="#5a5a5a")    # 끝난 것
+            tv.tag_configure("none", foreground="#8a8a8a")    # 안내 문구
+            # 줄을 두 번 누르면 씬 파일명을 클립보드로. 이름이 길어 칸에는
+            # 줄여 적으므로, 배치·삭제 명령에 붙여 넣으려면 이게 필요하다.
+            tv.bind("<Double-1>", self.copy_scene)
 
         self.root.after(100, self.tick)
         threading.Thread(target=self.worker, daemon=True).start()
 
-    def _table(self, title, cols, rows):
-        """제목 붙은 표 하나. 화면에 보이는 줄보다 많이 넣으므로 스크롤바를 단다."""
+    def _table(self, title, cols, rows, grow: bool = True):
+        """제목 붙은 표 하나. 화면에 보이는 줄보다 많이 넣으므로 스크롤바를 단다.
+
+        `grow=False`면 창을 키워도 지정한 줄 수 높이를 유지한다. 남는 높이는
+        전처리 표가 가져간다 — 대기 목록이 길어 더 보여 줄수록 쓸모가 있다.
+        """
         frame = self.ttk.LabelFrame(self.root, text=title, padding=(4, 2))
-        frame.pack(fill="both", expand=True, padx=6, pady=3)
+        frame.pack(fill="both", expand=grow, padx=6, pady=3)
         tv = self.ttk.Treeview(frame, columns=[c[0] for c in cols],
-                               show="headings", height=rows, selectmode="none")
+                               show="headings", height=rows, selectmode="browse")
         bar = self.ttk.Scrollbar(frame, orient="vertical", command=tv.yview)
         tv.configure(yscrollcommand=bar.set)
-        for key, label, width in cols:
-            tv.heading(key, text=label)
-            tv.column(key, width=width, anchor="w", stretch=(key in ("where", "scene", "info")))
+        for col in cols:
+            key, label, width = col[0], col[1], col[2]
+            anchor = col[3] if len(col) > 3 else "w"       # 숫자 칸은 오른쪽 정렬
+            tv.heading(key, text=label, anchor=anchor)
+            tv.column(key, width=width, anchor=anchor,
+                      stretch=(key in ("where", "scene", "info")))
         tv.pack(side="left", fill="both", expand=True)
         bar.pack(side="right", fill="y")
         return tv
+
+    def copy_scene(self, event) -> None:
+        """더블클릭한 줄의 씬 파일명을 클립보드에 넣는다."""
+        tv = event.widget
+        item = tv.identify_row(event.y)
+        name = self.names.get((str(tv), item))
+        if not name:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(name)
+        self.status.config(text=f"복사됨: {name}")
 
     # --- 작업 스레드 ---------------------------------------------------------
 
@@ -555,52 +664,46 @@ class Dashboard:
             pass
         self.root.after(1000, self.tick)
 
+    TAGS = {"미수신": "new", "받는중": "run", "전처리중": "run",
+            "완료": "done", "중단?": "hot"}
+
     def draw(self) -> None:
-        st, rows = self.local, self.rows
+        st = self.local
+        merged = merge_rows(self.rows, st, self.args.days)
         busy = [k for k in st.busy if not st.busy[k][2]]
         stalled = [k for k in st.busy if st.busy[k][2]]
         pending = [k for k in st.zips if k not in st.outs and k not in st.busy]
-        n_new = sum(1 for r in rows if st.state_of(scene_key(r["id"])) == "미수신")
+        n_new = sum(1 for r in merged if r["state"] == "미수신")
+        self.names.clear()
 
+        scanned = (datetime.fromtimestamp(st.scanned, KST).strftime("%H:%M:%S")
+                   if st.scanned else "-")
         self.status.config(
             text=(f"CDSE {self.fetched}" + ("  조회 중…" if self.busy_cdse else "")
-                  + f"   ·   로컬 {datetime.now(KST):%H:%M:%S}"))
+                  + f"   ·   폴더 스캔 {scanned}"))
+        self.btn_refresh.state(["disabled"] if self.busy_cdse else ["!disabled"])
         # 작업표시줄에 창을 최소화해 둬도 요점은 보이게 한다.
         self.root.title(f"S1 현황 · 처리중 {len(busy)} · 대기 {len(pending)}"
                         + (f" · 미수신 {n_new}" if n_new else ""))
         self.summary.config(
-            text=(f"CDSE {self.args.days}일 {len(rows)}개 · 미수신 {n_new}    |    "
-                  f"보유 {len(st.zips)}"
+            text=(f"최근 {self.args.days}일 {len(merged)}개 · 미수신 {n_new}"
                   + (f" · 받는중 {len(st.parts)}" if st.parts else "")
+                  + f"    |    보유 {len(st.zips)}"
                   + f"    |    대기 {len(pending)} · 처리중 {len(busy)}"
                   + (f" · 중단? {len(stalled)}" if stalled else "")
                   + f" · 완료 {len(st.outs)}"))
 
-        # CDSE ---------------------------------------------------------------
-        self.tv_cdse.delete(*self.tv_cdse.get_children())
-        for r in rows[:self.args.cdse_rows * 3]:
-            state = st.state_of(scene_key(r["id"]))
-            tag = {"미수신": "hot", "전처리중": "run", "받는중": "run",
-                   "완료": "done"}.get(state, "")
-            self.tv_cdse.insert(
-                "", "end", tags=(tag,),
-                values=(kst_hm(r["datetime"]),
-                        f"rel{r['rel'] or '?'} {r['dir']}",
-                        r["where"] or "-", f"{r['overlap']:.0f}%", state))
-
-        # 다운로드 -------------------------------------------------------------
-        self.tv_down.delete(*self.tv_down.get_children())
-        for p, mtime, size in sorted(st.parts, key=lambda x: -x[1]):
-            self.tv_down.insert("", "end", tags=("run",),
-                                values=(ago(mtime), short_id(p.name),
-                                        gb(size), "받는중"))
-        for key, (path, mtime, size) in sorted(
-                st.zips.items(), key=lambda kv: -kv[1][1])[:self.args.local_rows * 3]:
-            state = st.state_of(key)
-            tag = {"전처리중": "run", "완료": "done"}.get(state, "")
-            self.tv_down.insert("", "end", tags=(tag,),
-                                values=(ago(mtime), short_id(path.name),
-                                        gb(size), state))
+        # 최근 촬영 — 카탈로그와 로컬을 한 줄로 -------------------------------
+        self.tv_scene.delete(*self.tv_scene.get_children())
+        if not merged:
+            self._insert(self.tv_scene, "none", "",
+                         ("", "", "", f"최근 {self.args.days}일 한반도 촬영 없음",
+                          "", "", ""))
+        for r in merged[:self.args.scene_rows * 4]:
+            ov = f"{r['overlap']:.0f}%" if r["overlap"] is not None else "-"
+            self._insert(self.tv_scene, self.TAGS.get(r["state"], ""), r["name"],
+                         (kst_hm(r["when"]), r["sid"], r["orbit"], r["where"], ov,
+                          gb(r["size"]) if r["size"] else "-", r["state"]))
 
         # 전처리 ---------------------------------------------------------------
         self.tv_proc.delete(*self.tv_proc.get_children())
@@ -608,19 +711,27 @@ class Dashboard:
             name, started, stale = st.busy[key]
             out_tif = self.args.out_dir / (Path(name).stem + self.args.out_suffix + ".tif")
             written = gb(out_tif.stat().st_size) if out_tif.exists() else "-"
-            self.tv_proc.insert(
-                "", "end", tags=("hot" if stale else "run",),
-                values=("중단?" if stale else "처리중", short_id(name),
-                        f"{ago(started)} 시작 · {written} 기록"))
-        for key in sorted(pending, reverse=True)[:self.args.local_rows]:
+            self._insert(self.tv_proc, "hot" if stale else "run", name,
+                         ("중단?" if stale else "처리중", sid_label(name), kst_of(name),
+                          f"{ago(started)} 시작 · {written} 기록"))
+        if not st.busy:
+            self._insert(self.tv_proc, "none", "",
+                         ("", "", "", "지금 굽는 씬 없음"))
+        for key in sorted(pending, reverse=True)[:self.args.proc_rows]:
             path, mtime, size = st.zips[key]
-            self.tv_proc.insert("", "end",
-                                values=("대기", short_id(path.name), gb(size)))
+            self._insert(self.tv_proc, "", path.name,
+                         ("대기", sid_label(path.name), kst_of(path.name), gb(size)))
         for key, (path, mtime, size) in sorted(
-                st.outs.items(), key=lambda kv: -kv[1][1])[:self.args.local_rows]:
-            self.tv_proc.insert("", "end", tags=("done",),
-                                values=("완료", short_id(path.name),
-                                        f"{gb(size)} · {ago(mtime)}"))
+                st.outs.items(), key=lambda kv: -kv[1][1])[:self.args.proc_rows]:
+            self._insert(self.tv_proc, "done", path.name,
+                         ("완료", sid_label(path.name), kst_of(path.name),
+                          f"{gb(size)} · {ago(mtime)}"))
+
+    def _insert(self, tv, tag: str, name: str, values) -> None:
+        """줄 하나 추가 + 더블클릭 복사용으로 씬 파일명을 기억해 둔다."""
+        item = tv.insert("", "end", tags=(tag,), values=values)
+        if name:
+            self.names[(str(tv), item)] = name
 
     def run(self) -> None:
         self.root.mainloop()
@@ -651,9 +762,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="로컬 파일 스캔 주기(초). 기본 20")
     ap.add_argument("--cdse-minutes", type=int, default=15,
                     help="CDSE(STAC) 조회 주기(분). 기본 15")
-    ap.add_argument("--cdse-rows", type=int, default=6, help="CDSE 표 줄 수")
-    ap.add_argument("--local-rows", type=int, default=5, help="로컬 표 줄 수")
-    ap.add_argument("--geometry", default="600x760", help="창 크기·위치(예: 600x760+40+40)")
+    ap.add_argument("--scene-rows", type=int, default=9,
+                    help="'최근 촬영' 표에 보이는 줄 수(더 있으면 스크롤)")
+    ap.add_argument("--proc-rows", type=int, default=9,
+                    help="'전처리' 표에 보이는 줄 수")
+    ap.add_argument("--geometry", default="620x620", help="창 크기·위치(예: 620x620+40+40)")
     ap.add_argument("--font", default="Malgun Gothic")
     ap.add_argument("--font-size", type=int, default=9)
     ap.add_argument("--no-topmost", dest="topmost", action="store_false",
