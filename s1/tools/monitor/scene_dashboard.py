@@ -77,15 +77,16 @@ PROJECT_DIR = Path(__file__).resolve().parents[3]
 if str(PROJECT_DIR) not in sys.path:            # 파일 경로로 직접 실행할 때
     sys.path.insert(0, str(PROJECT_DIR))
 
-from s1.core.paths import (DOWNLOADS_DIR, GEOJSON_DIR, GRD_DIR,  # noqa: E402
+from s1.core.paths import (DOWNLOADS_DIR, GRD_DIR,               # noqa: E402
                            KOREA_PENINSULA, RTC_FROST_VH_DIR, rel)
 from s1.core.scene import parse_scene                            # noqa: E402
+from s1.tools.monitor import acquisition_plan                    # noqa: E402
+from s1.tools.monitor.footprint_label import (SIDO_GEOJSON, SidoIndex,  # noqa: E402
+                                              describe_footprint)
 from s1.tools.monitor.monitor_new_scenes import (KOREA_BBOX, Boundary,  # noqa: E402
-                                                 load_rings, point_in_ring,
-                                                 search_stac)
+                                                 load_rings, search_stac)
 
 KST = timezone(timedelta(hours=9))
-SIDO_GEOJSON = GEOJSON_DIR / "sido_simplified.geojson"
 CACHE_PATH = DOWNLOADS_DIR / "dashboard_cache.json"
 
 # 배치 러너가 쓰는 임시폴더 접두사(s1/preprocess/batch_runner.py 호출부들).
@@ -132,100 +133,6 @@ def short_id(name: str) -> str:
     if not k:
         return name[:28]
     return f"{k.platform} {kst_of(name)} {k.sid}"
-
-
-# --- 대략적인 위치(시도) -----------------------------------------------------
-
-class SidoIndex:
-    """시도 경계 묶음. monitor_new_scenes.Boundary 와 같은 1°격자 색인 방식이되,
-    "안/밖"이 아니라 **어느 시도인지**를 돌려준다.
-
-    경계는 `geojson/sido_simplified.geojson`(build_sido_geojson.py 산출물).
-    파일이 없으면 위치 칸만 비고 나머지는 그대로 돈다.
-    """
-
-    def __init__(self, path: Path) -> None:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        self.rings: list[tuple[str, list[tuple[float, float]]]] = []
-        self.index: dict[tuple[int, int], list[int]] = {}
-        for feat in data.get("features", []):
-            name = feat.get("properties", {}).get("name", "?")
-            geom = feat.get("geometry") or {}
-            if geom.get("type") == "Polygon":
-                polys = [geom["coordinates"]]
-            elif geom.get("type") == "MultiPolygon":
-                polys = geom["coordinates"]
-            else:
-                continue
-            for poly in polys:
-                ring = [(float(p[0]), float(p[1])) for p in poly[0]]
-                k = len(self.rings)
-                self.rings.append((name, ring))
-                xs = [p[0] for p in ring]
-                ys = [p[1] for p in ring]
-                for cx in range(int(min(xs) // 1), int(max(xs) // 1) + 1):
-                    for cy in range(int(min(ys) // 1), int(max(ys) // 1) + 1):
-                        self.index.setdefault((cx, cy), []).append(k)
-
-    def at(self, x: float, y: float) -> str | None:
-        for k in self.index.get((int(x // 1), int(y // 1)), ()):
-            name, ring = self.rings[k]
-            if point_in_ring(x, y, ring):
-                return name
-        return None
-
-
-def describe_footprint(geom: dict, boundary: Boundary | None,
-                       sido: SidoIndex | None, step: float = 0.05,
-                       min_share: float = 8.0, max_names: int = 3
-                       ) -> tuple[float, str]:
-    """footprint 하나를 (한반도 겹침%, "충남·전북")으로 요약한다.
-
-    겹침%와 시도 판정을 **같은 표본 격자 한 번**으로 처리한다. 따로 돌리면
-    프레임마다 격자를 두 번 뿌리게 되고, 대시보드는 이걸 수십 프레임에
-    반복하므로 그 차이가 체감된다.
-
-    시도는 **육지 표본 중 비율**이 min_share% 이상인 것만 큰 순서로 최대
-    max_names개. 프레임 대부분이 바다인 경우가 흔해 전체 표본 대비로 세면
-    전부 잘려 나간다.
-    """
-    if not geom:
-        return 0.0, ""
-    if geom.get("type") == "Polygon":
-        polys = [geom["coordinates"]]
-    elif geom.get("type") == "MultiPolygon":
-        polys = geom["coordinates"]
-    else:
-        return 0.0, ""
-    rings = [[(float(p[0]), float(p[1])) for p in poly[0]] for poly in polys]
-    xs = [p[0] for r in rings for p in r]
-    ys = [p[1] for r in rings for p in r]
-
-    n_in = n_hit = 0
-    counts: dict[str, int] = {}
-    y = min(ys)
-    while y <= max(ys):
-        x = min(xs)
-        while x <= max(xs):
-            if any(point_in_ring(x, y, r) for r in rings):
-                n_in += 1
-                if boundary is not None and boundary.contains(x, y):
-                    n_hit += 1
-                if sido is not None:
-                    name = sido.at(x, y)
-                    if name:
-                        counts[name] = counts.get(name, 0) + 1
-            x += step
-        y += step
-
-    pct = 100.0 * n_hit / n_in if n_in else 0.0
-    total_land = sum(counts.values())
-    names = ""
-    if total_land:
-        ranked = sorted(counts.items(), key=lambda kv: -kv[1])
-        keep = [n for n, c in ranked if 100.0 * c / total_land >= min_share]
-        names = "·".join(keep[:max_names]) or ranked[0][0]
-    return pct, names
 
 
 # --- 로컬 상태 ---------------------------------------------------------------
@@ -431,6 +338,14 @@ PROC_SORT = {
     "time": lambda row: row["obs"],
 }
 
+PLAN_SORT = {
+    "time": lambda row: row["raw"]["begin"],
+    "sat": lambda row: (row["raw"]["sat"], int(row["raw"]["rel"] or 0)),
+    "where": lambda row: row["raw"]["where"],
+    "cover": lambda row: row["raw"]["cover_pct"],
+    "dams": lambda row: len(row["raw"]["dams"]),
+}
+
 
 def load_cache() -> dict:
     try:
@@ -480,6 +395,29 @@ def gb(size: int) -> str:
 
 # --- 콘솔 출력(--once) -------------------------------------------------------
 
+def plan_rows_for_once(args) -> list[dict]:
+    """`--once`용 촬영 계획. 캐시가 `--plan-hours`보다 오래됐을 때만 새로 뽑는다.
+
+    계획 조회는 KML 6 MB를 받아 훑는 일이라 10초 남짓 걸린다. 콘솔에서 상태만
+    보려는데 매번 그걸 하게 두지 않는다.
+    """
+    if args.plan_hours <= 0:
+        return []
+    cache_path = acquisition_plan.PLAN_CACHE
+    fresh = (cache_path.exists()
+             and time.time() - cache_path.stat().st_mtime < args.plan_hours * 3600)
+    if fresh:
+        return acquisition_plan.load_cache().get("rows", [])
+    try:
+        rows = acquisition_plan.korea_passes(days=args.plan_days)
+        acquisition_plan.save_cache(rows, datetime.now(KST).strftime("%m-%d %H:%M"))
+        return rows
+    except Exception as e:                                   # noqa: BLE001
+        print(f"  (촬영계획 조회 실패: {e} — 캐시를 씁니다)", file=sys.stderr)
+        return acquisition_plan.load_cache().get("rows", [])
+
+
+
 def render_text(rows: list[dict], st: LocalState, fetched: str, args) -> str:
     out: list[str] = []
     add = out.append
@@ -502,6 +440,16 @@ def render_text(rows: list[dict], st: LocalState, fetched: str, args) -> str:
         size = gb(r["size"]) if r["size"] else "-"
         add(f"  {kst_hm(r['when']):<12} {r['sid']:<9} {r['orbit']:<10} "
             f"{r['where']:<22} {ov:>6} {size:>9}  {r['state']}")
+
+    add("")
+    plan = plan_rows_for_once(args)
+    add(f"■ 촬영 예정 {args.plan_days}일 (ESA 계획) — {len(plan)}건")
+    if not plan:
+        add("  (계획 없음 — 계획 파일이 아직 그 기간을 안 덮을 수도 있다)")
+    for p in plan:
+        dams = f"  댐·보 {len(p['dams'])}곳" if p["dams"] else ""
+        add(f"  {acquisition_plan.kst_str(p['begin'])} KST  {p['sat']} rel{p['rel']:>3}  "
+            f"{p['where'] or '-':<22} 한반도 {p['cover_pct']:>5.1f}%{dams}")
 
     add("")
     add(f"■ 전처리({rel(args.out_dir)}) — 대기 {len(pending)} · 처리중 {len(busy)}"
@@ -543,11 +491,18 @@ class Dashboard:
         self.names: dict = {}          # (표, 줄) -> 씬 파일명 (더블클릭 복사용)
         self.headings: dict = {}       # 표 -> {열: 머리글 원문} (▲▼ 표시용)
         self.sort: dict = {}           # 표 -> (열, 내림차순) — 없으면 기본 순서
+        self.plan: list[dict] = []     # 촬영 예정(ESA 계획 KML)
+        self.plan_fetched = "-"
+        self.next_plan = 0.0
 
         cache = load_cache()
         if cache.get("rows"):
             self.rows = cache["rows"]
             self.fetched = cache.get("fetched", "-") + " (캐시)"
+        plan_cache = acquisition_plan.load_cache()
+        if plan_cache.get("rows"):
+            self.plan = plan_cache["rows"]
+            self.plan_fetched = plan_cache.get("fetched", "-") + " (캐시)"
 
         self.root = tk.Tk()
         self.root.title("S1 한반도 현황")
@@ -591,6 +546,14 @@ class Dashboard:
              ("size", "크기", 62, "e"), ("st", "상태", 58)],
             args.scene_rows, grow=False,
             sortable=("time", "sid", "orbit", "where", "ov", "size", "st"))
+        # 앞으로 찍을 것 — 카탈로그가 아니라 ESA 촬영계획 KML 이 출처다.
+        self.tv_plan = self._table(
+            "촬영 예정 (ESA 계획)",
+            [("time", "예정(KST)", 86), ("sat", "위성·궤도", 90),
+             ("where", "위치", 180), ("cover", "한반도", 52, "e"),
+             ("dams", "댐·보", 52, "e")],
+            args.plan_rows, grow=False,
+            sortable=("time", "sat", "where", "cover", "dams"))
         # 위 표와 같은 순서·같은 이름으로 — 두 표를 눈으로 잇는 것은 씬 이름이다.
         # '비고'는 줄마다 담는 값이 달라(경과·크기·완료시각) 정렬 대상이 아니다.
         self.tv_proc = self._table(
@@ -600,12 +563,13 @@ class Dashboard:
             args.proc_rows, grow=True,
             sortable=("st", "sid", "time"))
 
-        for tv in (self.tv_scene, self.tv_proc):
+        for tv in (self.tv_scene, self.tv_plan, self.tv_proc):
             tv.tag_configure("hot", foreground="#c62828")     # 손 볼 것(중단?)
             tv.tag_configure("new", foreground="#b06000")     # 아직 안 받은 것
             tv.tag_configure("run", foreground="#0057b8")     # 진행 중
             tv.tag_configure("done", foreground="#5a5a5a")    # 끝난 것
             tv.tag_configure("none", foreground="#8a8a8a")    # 안내 문구
+            tv.tag_configure("plan", foreground="#1f6f3f")    # 앞으로 찍을 것
             # 줄을 두 번 누르면 씬 파일명을 클립보드로. 이름이 길어 칸에는
             # 줄여 적으므로, 배치·삭제 명령에 붙여 넣으려면 이게 필요하다.
             tv.bind("<Double-1>", self.copy_scene)
@@ -699,6 +663,18 @@ class Dashboard:
             except Exception as e:                           # noqa: BLE001
                 self.q.put(("error", f"로컬 스캔 실패: {e}"))
 
+            # 촬영 계획 — ESA 가 하루 몇 번 갱신하므로 자주 볼 이유가 없다.
+            if self.args.plan_hours > 0 and time.time() >= self.next_plan:
+                self.next_plan = time.time() + self.args.plan_hours * 3600
+                try:
+                    rows = acquisition_plan.korea_passes(days=self.args.plan_days)
+                    stamp = datetime.now(KST).strftime("%m-%d %H:%M")
+                    acquisition_plan.save_cache(rows, stamp)
+                    self.q.put(("plan", (rows, stamp)))
+                except Exception as e:                       # noqa: BLE001
+                    self.q.put(("error", f"촬영계획 조회 실패: {e}"))
+                    self.next_plan = time.time() + 600
+
             if time.time() >= self.next_cdse:
                 self.next_cdse = time.time() + self.args.cdse_minutes * 60
                 self.q.put(("busy", True))
@@ -717,6 +693,7 @@ class Dashboard:
 
     def refresh_now(self) -> None:
         self.next_cdse = 0.0
+        self.next_plan = 0.0
 
     # --- 그리기 --------------------------------------------------------------
 
@@ -728,6 +705,8 @@ class Dashboard:
                     self.local = payload
                 elif kind == "cdse":
                     self.rows, self.fetched = payload
+                elif kind == "plan":
+                    self.plan, self.plan_fetched = payload
                 elif kind == "busy":
                     self.busy_cdse = payload
                 elif kind == "error":
@@ -753,6 +732,7 @@ class Dashboard:
                    if st.scanned else "-")
         self.status.config(
             text=(f"CDSE {self.fetched}" + ("  조회 중…" if self.busy_cdse else "")
+                  + f"   ·   계획 {self.plan_fetched}"
                   + f"   ·   폴더 스캔 {scanned}"))
         self.btn_refresh.state(["disabled"] if self.busy_cdse else ["!disabled"])
         # 작업표시줄에 창을 최소화해 둬도 요점은 보이게 한다.
@@ -781,6 +761,23 @@ class Dashboard:
                           "", "", ""))
         for row in self._sorted(self.tv_scene, scene_rows, SCENE_SORT):
             self._insert(self.tv_scene, row["tag"], row["name"], row["values"])
+
+        # 촬영 예정 ------------------------------------------------------------
+        plan_rows = [{
+            "tag": "plan", "name": "", "raw": p,
+            "values": (acquisition_plan.kst_str(p["begin"]),
+                       f"{p['sat']} rel{p['rel']}", p["where"] or "-",
+                       f"{p['cover_pct']:.0f}%",
+                       str(len(p["dams"])) if p["dams"] else "-"),
+        } for p in self.plan]
+
+        self.tv_plan.delete(*self.tv_plan.get_children())
+        if not plan_rows:
+            self._insert(self.tv_plan, "none", "",
+                         ("", "", f"앞으로 {self.args.plan_days}일 계획 없음"
+                          " (계획 파일이 아직 그 기간을 안 덮을 수 있다)", "", ""))
+        for row in self._sorted(self.tv_plan, plan_rows, PLAN_SORT):
+            self._insert(self.tv_plan, row["tag"], row["name"], row["values"])
 
         # 전처리 ---------------------------------------------------------------
         proc_rows = []
@@ -847,11 +844,17 @@ def build_parser() -> argparse.ArgumentParser:
                     help="로컬 파일 스캔 주기(초). 기본 20")
     ap.add_argument("--cdse-minutes", type=int, default=15,
                     help="CDSE(STAC) 조회 주기(분). 기본 15")
-    ap.add_argument("--scene-rows", type=int, default=9,
+    ap.add_argument("--plan-days", type=int, default=10,
+                    help="촬영 계획을 며칠 앞까지 볼지. 기본 10")
+    ap.add_argument("--plan-hours", type=float, default=6.0,
+                    help="촬영 계획 재조회 주기(시간). 0이면 계획 표를 끈다")
+    ap.add_argument("--scene-rows", type=int, default=8,
                     help="'최근 촬영' 표에 보이는 줄 수(더 있으면 스크롤)")
-    ap.add_argument("--proc-rows", type=int, default=9,
+    ap.add_argument("--plan-rows", type=int, default=4,
+                    help="'촬영 예정' 표에 보이는 줄 수")
+    ap.add_argument("--proc-rows", type=int, default=8,
                     help="'전처리' 표에 보이는 줄 수")
-    ap.add_argument("--geometry", default="620x620", help="창 크기·위치(예: 620x620+40+40)")
+    ap.add_argument("--geometry", default="640x760", help="창 크기·위치(예: 640x760+40+40)")
     ap.add_argument("--font", default="Malgun Gothic")
     ap.add_argument("--font-size", type=int, default=9)
     ap.add_argument("--no-topmost", dest="topmost", action="store_false",

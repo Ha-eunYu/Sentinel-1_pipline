@@ -154,7 +154,8 @@ s1/
     dem/                   #   make_basin_dem, prepare_ngii_dem, make_ls_mask, make_test_dem
     audit/                 #   check_*, compare_*, audit_*, benchmark_rtc,
                            #   verify_scene_footprint, audit_rtc_bbox_vs_footprint
-    monitor/               #   monitor_new_scenes (신규 촬영 감시), scene_dashboard (현황 창)
+    monitor/               #   monitor_new_scenes (신규 촬영 감시), scene_dashboard (현황 창),
+                           #   acquisition_plan (ESA 촬영계획), footprint_label (시도·지점 판정)
     scratch/               #   일회성 조사 스크립트 (재현 보장 안 함)
 
 docs/                      # 문서 (주제별)
@@ -234,7 +235,8 @@ downloads/
 | 신규 침수 탐지 | — | **v3 8개 날짜 + 동일궤도 3쌍 완료** | v3: 7/4·7/7·7/13~16·7/18·7/19. 동일궤도: 7/13↔7/1·7/18↔7/6·7/19↔6/25. [FLOOD_TIMELINE_KR.md](docs/flood/FLOOD_TIMELINE_KR.md) |
 | 단일시기 수체 지도 | — | 6/25~7/20 전 날짜 완료 | baseline 무관 `flood_water_total_<날짜>.tif` (변화 아닌 상태, 고정 -16dB). **Otsu판(궤도별 18그룹)**: `water_otsu/flood_water_total_<날짜>_o<궤도>.tif` — 타일기반 Otsu 자동임계값([OTSU_SPLIT_BASED_KR.md](docs/water/OTSU_SPLIT_BASED_KR.md)), 면적 [WATER_AREA_KR.md](docs/water/WATER_AREA_KR.md) |
 | 신규 촬영 감시 | — | **작업 스케줄러 1시간 간격 가동(8/18)** | STAC 폴링으로 한반도 신규 S1 알림. [SCENE_MONITOR_KR.md](docs/pipeline/SCENE_MONITOR_KR.md) |
-| 파이프라인 현황 창 | — | **신설(8/18)** | CDSE 최신 촬영(시각·궤도·위치) + 다운로드/대기/처리중/완료를 한 창에서. [SCENE_DASHBOARD_KR.md](docs/pipeline/SCENE_DASHBOARD_KR.md) |
+| 파이프라인 현황 창 | — | **신설(8/18)** | 최근 촬영(시각·궤도·위치·상태) + 촬영 예정 + 전처리 대기/처리중/완료를 한 창에서. [SCENE_DASHBOARD_KR.md](docs/pipeline/SCENE_DASHBOARD_KR.md) |
+| 촬영 계획 조회 | — | **신설(8/18)** | ESA 계획 KML → 앞으로 N일 한반도 통과·댐보 51곳 포함 판정. [ACQUISITION_PLAN_KR.md](docs/pipeline/ACQUISITION_PLAN_KR.md) |
 
 - **홍수 침수 시간선(v3)**: 7/14~15 조합에서 **남한 154.1 km²(보수적)** 최대
   관측 — 상세는 [FLOOD_TIMELINE_KR.md](docs/flood/FLOOD_TIMELINE_KR.md). (**⚠️ 2026-07-22
@@ -357,11 +359,21 @@ S1A는 **2026-06-29부로 12년 운영을 마치고 퇴역**했습니다
 카탈로그에 없다고 촬영 실패가 아니라, 애초에 계획에 없었을 수 있습니다. 확정
 일정은 ESA가 공개하는 계획 KML로 확인합니다:
 
+**이 절차는 도구로 자동화돼 있습니다** — 아래는 도구가 하는 일이자 수동 확인법입니다.
+
+```bash
+python -m s1.tools.monitor.acquisition_plan --days 10     # 앞으로 10일 한반도 통과
+python -m s1.tools.monitor.acquisition_plan --dams-only   # 댐·보 51곳이 드는 것만
+```
+
 1. <https://sentinels.copernicus.eu/copernicus/sentinel-1/acquisition-plans> 에서
    위성별(S1C/S1D) KML 다운로드 (파일명이 계획 기간: `s1c_mp_user_<시작>_<끝>`)
 2. KML의 `<Placemark>`에서 한국 통과 예상 시각(UTC) 주변의 `<begin>/<end>`와
    `<coordinates>` 폴리곤이 한반도(경도 125~130, 위도 33~39)와 겹치는지 확인
 3. 촬영 후 카탈로그 등록까지 보통 3~6시간 소요
+
+자세한 사용법·한계는 [ACQUISITION_PLAN_KR.md](docs/pipeline/ACQUISITION_PLAN_KR.md).
+계획 결과는 현황 창의 '촬영 예정' 표에도 그대로 나옵니다.
 
 참고 — 홍수일(7/8) 이후 실제 확보된 post-event 관측: 7/8·7/10·7/11·7/13·7/14·
 7/15·7/16·7/18·7/19 (패스별 프레임 구성과 침수 분석 결과는
@@ -488,6 +500,8 @@ D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 
   감시와 윈도우 백그라운드(작업 스케줄러 등) 설정
 - [SCENE_DASHBOARD_KR.md](docs/pipeline/SCENE_DASHBOARD_KR.md) — 상시 현황 창: CDSE 최신 촬영
   (시각·상대궤도·시도 단위 위치)과 이 PC의 다운로드·전처리 대기/처리중/완료
+- [ACQUISITION_PLAN_KR.md](docs/pipeline/ACQUISITION_PLAN_KR.md) — ESA 촬영계획 KML로
+  **앞으로 찍을 것** 보기(시도·댐보 51곳 포함 판정). 현황 창의 '촬영 예정' 표 출처
 - [PROCESS_202507_202607_KR.md](docs/pipeline/PROCESS_202507_202607_KR.md) — 2025-07 ↔ 2026-07
   두 시기를 동일 파이프라인으로 처리한 전 과정(씬 선별 → RTC → 모자이크 → Otsu → 면적)
 - [WORKLOG_20260807_KR.md](docs/worklog/WORKLOG_20260807_KR.md) — **8월 가뭄 비교쌍**(ASC54

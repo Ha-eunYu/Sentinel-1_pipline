@@ -11,7 +11,8 @@
 | 런처 | [scene_dashboard.ps1](../../scripts/scene_dashboard.ps1) | 콘솔 없이(`pythonw`) 띄우기 |
 | 시도 경계 | `geojson/sido_simplified.geojson` | 위치 표시용(충남·전남 …). 326 KB |
 | 경계 생성기 | [build_sido_geojson.py](../../s1/tools/monitor/build_sido_geojson.py) | 위 파일을 굽는 1회성 도구(geopandas 필요) |
-| 캐시 | `downloads/dashboard_cache.json` | 마지막 STAC 결과. 창을 다시 띄우면 즉시 그린다 |
+| 촬영 계획 | [acquisition_plan.py](../../s1/tools/monitor/acquisition_plan.py) | ESA 계획 KML → 앞으로 찍을 것 ([ACQUISITION_PLAN_KR.md](ACQUISITION_PLAN_KR.md)) |
+| 캐시 | `downloads/dashboard_cache.json` · `plan_cache.json` | 마지막 STAC·계획 결과. 창을 다시 띄우면 즉시 그린다 |
 
 - **의존성 없음.** 표준 라이브러리와 tkinter뿐. 저장소 모듈은 `s1.core.paths` ·
   `s1.core.scene` · `monitor_new_scenes` 셋만 쓰는데 모두 순수 파이썬이라
@@ -24,14 +25,19 @@
 ## 1. 화면
 
 ```text
-CDSE 08-18 11:24   ·   폴더 스캔 11:24:24        [✓항상 위] [새로고침]
-최근 7일 12개 · 미수신 0  |  보유 174  |  대기 78 · 처리중 2 · 완료 94
+CDSE 08-18 13:15  ·  계획 08-18 13:15  ·  폴더 스캔 13:14:52   [✓항상 위] [새로고침]
+최근 7일 12개 · 미수신 0  |  보유 174  |  대기 76 · 처리중 2 · 완료 96
 
-■ 최근 촬영
+■ 최근 촬영                                       (이미 찍힌 것 — CDSE 카탈로그)
   촬영(KST)    씬        궤도        위치                    한반도    크기   상태
   08-14 06:31 S1C D635  rel134 하행 경북·충남·충북            85%  1.12 GB 대기
   08-14 06:31 S1C 5ACA  rel134 하행 강원·경기·강원도(북)       85%  1.15 GB 완료
   08-12 18:39 S1D 8E47  rel25  상행 황해남도·평안북도·평안남도   21%  1.00 GB 전처리중
+
+■ 촬영 예정 (ESA 계획)                              (앞으로 찍을 것 — 계획 KML)
+  예정(KST)   위성·궤도    위치                       한반도  댐·보
+  08-19 18:30 S1D rel127  전남·전북·경남                16%    16
+  08-21 06:14 S1C rel61   경북·함경북도·경남              20%    29
 
 ■ 전처리
   상태    씬        촬영(KST)     비고
@@ -40,22 +46,26 @@ CDSE 08-18 11:24   ·   폴더 스캔 11:24:24        [✓항상 위] [새로고
   완료    S1C 0868  08-07 06:39  2.46 GB · 45분 전
 ```
 
-**표를 둘로 나눠 두지 않는다.** 카탈로그(무엇이 올라왔나)와 다운로드(무엇을
-받았나)를 따로 그리면 같은 촬영이 양쪽에 나와 눈이 두 번 간다. 둘을 잇는 것은
-어차피 촬영시각이라 **촬영 하나당 한 줄**로 합치고, 어디까지 왔는지는 `상태`
-칸 하나가 말한다: 미수신 → 받는중 → 대기 → 전처리중 → 완료.
+**카탈로그와 다운로드는 한 표로 합쳐져 있다.** 따로 그리면 같은 촬영이 양쪽에
+나와 눈이 두 번 간다. 둘을 잇는 것은 어차피 촬영시각이라 **촬영 하나당 한
+줄**로 묶고, 어디까지 왔는지는 `상태` 칸 하나가 말한다: 미수신 → 받는중 →
+대기 → 전처리중 → 완료.
+
+가운데 표만 시간축이 반대다 — **앞으로 찍을 것**이라 출처도 카탈로그가 아니라
+ESA 촬영계획 KML이고([ACQUISITION_PLAN_KR.md](ACQUISITION_PLAN_KR.md)), 줄 색도
+초록으로 구분한다. `댐·보`는 그 통과에 드는 관심 지점(51곳) 개수다.
 
 | 요소 | 규칙 |
 | --- | --- |
-| 색 | 주황=아직 안 받음 · 파랑=진행 중(받는중·전처리중) · 회색=끝난 것 · 빨강=중단? |
+| 색 | 주황=아직 안 받음 · 파랑=진행 중(받는중·전처리중) · 회색=끝난 것 · 빨강=중단? · 초록=촬영 예정 |
 | 씬 이름 | 두 표 모두 `S1C D635`(위성 + 씬 ID 4hex) — 문서·명령에서 부르는 이름과 같다 |
 | 숫자 칸 | 한반도%·크기는 오른쪽 정렬 |
 | 더블클릭 | 그 줄의 **씬 파일명 전체**가 클립보드로 (배치 `--only`·삭제 명령에 붙여 넣기) |
 | 머리글 클릭 | 그 열로 정렬. 같은 열을 계속 누르면 **내림차순 ▼ → 오름차순 ▲ → 기본**(2절) |
 | 창 제목 | `S1 현황 · 처리중 2 · 대기 78` — 최소화해 둬도 작업표시줄에서 읽힌다 |
-| 높이 배분 | '최근 촬영'은 `--scene-rows` 줄 고정, 남는 높이는 '전처리'가 가져간다 |
+| 높이 배분 | '최근 촬영'·'촬영 예정'은 줄 수 고정, 남는 높이는 '전처리'가 가져간다 |
 
-두 표 모두 보이는 줄보다 많이 담고 스크롤바가 붙는다. 조회창(`--days`) 밖의
+세 표 모두 보이는 줄보다 많이 담고 스크롤바가 붙는다. 조회창(`--days`) 밖의
 보유분은 '최근 촬영'에 나오지 않고 '전처리'의 대기·완료 목록에서 본다.
 
 ### 정렬
@@ -151,7 +161,7 @@ conda run -n gis_copy python -m s1.tools.monitor.build_sido_geojson
 powershell -ExecutionPolicy Bypass -File scripts\scene_dashboard.ps1
 
 # 조회 일수·주기·창 크기 지정
-powershell -File scripts\scene_dashboard.ps1 -Days 7 -CdseMinutes 30 -Geometry "620x620+40+40"
+powershell -File scripts\scene_dashboard.ps1 -Days 7 -CdseMinutes 30 -Geometry "640x760+40+40"
 
 # 창 없이 콘솔에 한 번만 (터미널·로그용)
 powershell -File scripts\scene_dashboard.ps1 -Once
@@ -200,8 +210,10 @@ Get-Process pythonw | Where-Object { $_.MainWindowTitle -like "S1 현황*" } | S
 | `--min-overlap` | 1.0 | 한반도 겹침 하한(%) — 중국·일본 프레임 제외 |
 | `--step` | 0.05 | footprint 표본 격자 간격(도) |
 | `--stale-minutes` | 30 | 이 시간을 넘긴 유휴 임시폴더는 `중단?` |
-| `--geometry` / `-Geometry` | `620x620` | 창 크기(+위치) |
-| `--scene-rows` / `--proc-rows` | 9 / 9 | 표에 보이는 줄 수(더 있으면 스크롤) |
+| `--geometry` / `-Geometry` | `640x760` | 창 크기(+위치) |
+| `--scene-rows` / `--plan-rows` / `--proc-rows` | 8 / 4 / 8 | 표에 보이는 줄 수(더 있으면 스크롤) |
+| `--plan-days` | 10 | 촬영 계획을 며칠 앞까지 볼지 |
+| `--plan-hours` | 6 | 촬영 계획 재조회 주기(시간). **0이면 계획 표를 끈다** |
 | `--font` / `--font-size` | Malgun Gothic / 9 | |
 | `--no-topmost` | (켜짐) | 다른 창 위 고정을 끈다 |
 | `--once` / `-Once` | 꺼짐 | 창 대신 콘솔에 한 번 출력 |
@@ -225,14 +237,19 @@ STAC 조회는 프레임 수에 비례해 걸린다(2026-08-18 실측: 22프레�
    사이에서 zip을 복사하는 중이면 잠깐 그렇게 보일 수 있다. 실제로 죽었는지는
    배치 콘솔·`temp/logs/*.log`로 확인한다.
 6. **GRD만 본다.** SLC 진행상황은 다루지 않는다(`sentinel1/`).
+7. **'촬영 예정'은 계획이지 보장이 아니다.** ESA가 수시로 갱신하고 실제 촬영이
+   빠지기도 한다 — 한계는 [ACQUISITION_PLAN_KR.md](ACQUISITION_PLAN_KR.md) 4절.
 
-## 7. 감시 도구와의 관계
+## 7. 세 도구의 자리
 
-| | [monitor_new_scenes](SCENE_MONITOR_KR.md) | scene_dashboard |
-| --- | --- | --- |
-| 언제 | 작업 스케줄러 1시간 간격 | 상시 창 |
-| 무엇을 | **새 촬영만** 알림(풍선·비프·flag) | 파이프라인 **전체 현황** |
-| 놓치면 | 알림을 못 보면 로그에서 확인 | 언제 봐도 현재 상태 |
+| | [monitor_new_scenes](SCENE_MONITOR_KR.md) | [acquisition_plan](ACQUISITION_PLAN_KR.md) | scene_dashboard |
+| --- | --- | --- | --- |
+| 시간축 | 방금 올라온 것 | **앞으로 찍을 것** | 지나간 것 + 예정 + 내 진행 |
+| 출처 | CDSE STAC | ESA 계획 KML | 위 둘 + 이 PC 파일 |
+| 언제 | 작업 스케줄러 1시간 간격 | 필요할 때 / 창이 6시간마다 | 상시 창 |
+| 내보내는 것 | 풍선 알림·비프·flag | 콘솔·JSON | 화면 |
 
-둘은 상태를 공유하지 않는다. 대시보드는 `monitor_state.json`을 읽지도 쓰지도
-않으므로 창을 띄워 둬도 감시 알림에 영향이 없다.
+셋은 상태를 공유하지 않는다. 대시보드는 `monitor_state.json`을 읽지도 쓰지도
+않으므로 창을 띄워 둬도 감시 알림에 영향이 없다. 계획 쪽은 결과 캐시
+(`plan_cache.json`)만 주고받는다 — 창이 없을 때 CLI로 갱신해 둬도 창이 그걸
+그대로 집어 든다.
