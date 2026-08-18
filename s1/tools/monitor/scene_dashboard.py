@@ -372,6 +372,7 @@ def merge_rows(cdse: list[dict], st: LocalState, days: int) -> list[dict]:
             "key": key,
             "when": r["datetime"],
             "sid": sid_label(name),
+            "rel": r["rel"],
             "orbit": f"rel{r['rel'] or '?'} {r['dir']}".strip(),
             "where": r["where"] or "-",
             "overlap": r["overlap"],
@@ -395,7 +396,7 @@ def merge_rows(cdse: list[dict], st: LocalState, days: int) -> list[dict]:
             "key": key,
             "when": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "sid": sid_label(name) if name else "-",
-            "orbit": "-", "where": "-", "overlap": None,
+            "rel": None, "orbit": "-", "where": "-", "overlap": None,
             "size": st.size_of(key),
             "state": st.state_of(key),
             "name": name,
@@ -403,6 +404,32 @@ def merge_rows(cdse: list[dict], st: LocalState, days: int) -> list[dict]:
 
     rows.sort(key=lambda r: r["when"], reverse=True)
     return rows
+
+
+# 상태를 파이프라인 진행 순서로 매긴다. 오름차순으로 정렬하면 **손 볼 것이 위로**
+# 온다(아직 안 받음 → 받는 중 → 대기 → 굽는 중 → 완료).
+STATE_RANK = {"미수신": 0, "받는중": 1, "대기": 2, "전처리중": 3, "중단?": 4,
+              "완료": 5}
+
+# 머리글 클릭 정렬에서 쓸 열별 정렬값. 화면에 찍힌 문자열이 아니라 **원래 값**으로
+# 정렬한다 — "1.12 GB"를 문자열로 세우면 9 GB가 10 GB보다 뒤로 간다.
+SCENE_SORT = {
+    "time": lambda row: row["raw"]["when"],
+    "sid": lambda row: row["raw"]["sid"],
+    "orbit": lambda row: (row["raw"]["rel"] if isinstance(row["raw"]["rel"], int)
+                          else -1),
+    "where": lambda row: row["raw"]["where"],
+    "ov": lambda row: (row["raw"]["overlap"] if row["raw"]["overlap"] is not None
+                       else -1.0),
+    "size": lambda row: row["raw"]["size"] or -1,
+    "st": lambda row: STATE_RANK.get(row["raw"]["state"], 9),
+}
+
+PROC_SORT = {
+    "st": lambda row: STATE_RANK.get(row["state"], 9),
+    "sid": lambda row: row["sid"],
+    "time": lambda row: row["obs"],
+}
 
 
 def load_cache() -> dict:
@@ -514,6 +541,8 @@ class Dashboard:
         self.next_cdse = 0.0
         self.busy_cdse = False
         self.names: dict = {}          # (표, 줄) -> 씬 파일명 (더블클릭 복사용)
+        self.headings: dict = {}       # 표 -> {열: 머리글 원문} (▲▼ 표시용)
+        self.sort: dict = {}           # 표 -> (열, 내림차순) — 없으면 기본 순서
 
         cache = load_cache()
         if cache.get("rows"):
@@ -560,13 +589,16 @@ class Dashboard:
             [("time", "촬영(KST)", 86), ("sid", "씬", 72), ("orbit", "궤도", 74),
              ("where", "위치", 118), ("ov", "한반도", 52, "e"),
              ("size", "크기", 62, "e"), ("st", "상태", 58)],
-            args.scene_rows, grow=False)
+            args.scene_rows, grow=False,
+            sortable=("time", "sid", "orbit", "where", "ov", "size", "st"))
         # 위 표와 같은 순서·같은 이름으로 — 두 표를 눈으로 잇는 것은 씬 이름이다.
+        # '비고'는 줄마다 담는 값이 달라(경과·크기·완료시각) 정렬 대상이 아니다.
         self.tv_proc = self._table(
             "전처리",
             [("st", "상태", 58), ("sid", "씬", 72), ("time", "촬영(KST)", 86),
              ("info", "비고", 160)],
-            args.proc_rows, grow=True)
+            args.proc_rows, grow=True,
+            sortable=("st", "sid", "time"))
 
         for tv in (self.tv_scene, self.tv_proc):
             tv.tag_configure("hot", foreground="#c62828")     # 손 볼 것(중단?)
@@ -581,11 +613,13 @@ class Dashboard:
         self.root.after(100, self.tick)
         threading.Thread(target=self.worker, daemon=True).start()
 
-    def _table(self, title, cols, rows, grow: bool = True):
+    def _table(self, title, cols, rows, grow: bool = True, sortable=()):
         """제목 붙은 표 하나. 화면에 보이는 줄보다 많이 넣으므로 스크롤바를 단다.
 
         `grow=False`면 창을 키워도 지정한 줄 수 높이를 유지한다. 남는 높이는
         전처리 표가 가져간다 — 대기 목록이 길어 더 보여 줄수록 쓸모가 있다.
+
+        `sortable`에 든 열은 머리글을 누르면 정렬된다(아래 `click_sort`).
         """
         frame = self.ttk.LabelFrame(self.root, text=title, padding=(4, 2))
         frame.pack(fill="both", expand=grow, padx=6, pady=3)
@@ -593,15 +627,54 @@ class Dashboard:
                                show="headings", height=rows, selectmode="browse")
         bar = self.ttk.Scrollbar(frame, orient="vertical", command=tv.yview)
         tv.configure(yscrollcommand=bar.set)
+        labels = {}
         for col in cols:
             key, label, width = col[0], col[1], col[2]
             anchor = col[3] if len(col) > 3 else "w"       # 숫자 칸은 오른쪽 정렬
-            tv.heading(key, text=label, anchor=anchor)
+            labels[key] = label
+            if key in sortable:
+                tv.heading(key, text=label, anchor=anchor,
+                           command=lambda t=tv, k=key: self.click_sort(t, k))
+            else:
+                tv.heading(key, text=label, anchor=anchor)
             tv.column(key, width=width, anchor=anchor,
                       stretch=(key in ("where", "scene", "info")))
         tv.pack(side="left", fill="both", expand=True)
         bar.pack(side="right", fill="y")
+        self.headings[str(tv)] = labels
         return tv
+
+    # --- 정렬 ----------------------------------------------------------------
+
+    def click_sort(self, tv, key: str) -> None:
+        """머리글 클릭 — 같은 열을 계속 누르면 **오름차순 → 내림차순 → 기본**.
+
+        기본으로 돌아가는 자리를 남겨 둔 이유: 이 화면의 기본 순서(최신 촬영이
+        위, 전처리는 처리중→대기→완료)가 평소에 보는 순서다. 정렬을 한 번 걸면
+        갱신할 때마다 유지되므로, 되돌릴 방법이 없으면 "최신이 위"라는 전제가
+        조용히 깨진 채로 남는다.
+        """
+        cur = self.sort.get(str(tv))
+        first_desc = key in ("time", "ov", "size")     # 시각·수치는 큰 값부터
+        if cur is None or cur[0] != key:
+            self.sort[str(tv)] = (key, first_desc)
+        elif cur[1] == first_desc:
+            self.sort[str(tv)] = (key, not first_desc)
+        else:
+            self.sort.pop(str(tv), None)               # 세 번째 클릭 = 기본
+        self.draw()
+
+    def _sorted(self, tv, rows: list[dict], keyfuncs: dict) -> list[dict]:
+        """정렬 상태를 적용하고 머리글에 ▲▼ 표시를 붙인다."""
+        state = self.sort.get(str(tv))
+        for key, label in self.headings[str(tv)].items():
+            mark = ""
+            if state and state[0] == key:
+                mark = " ▼" if state[1] else " ▲"
+            tv.heading(key, text=label + mark)
+        if not state or state[0] not in keyfuncs:
+            return rows
+        return sorted(rows, key=keyfuncs[state[0]], reverse=state[1])
 
     def copy_scene(self, event) -> None:
         """더블클릭한 줄의 씬 파일명을 클립보드에 넣는다."""
@@ -694,38 +767,50 @@ class Dashboard:
                   + f" · 완료 {len(st.outs)}"))
 
         # 최근 촬영 — 카탈로그와 로컬을 한 줄로 -------------------------------
+        scene_rows = [{
+            "tag": self.TAGS.get(r["state"], ""), "name": r["name"], "raw": r,
+            "values": (kst_hm(r["when"]), r["sid"], r["orbit"], r["where"],
+                       f"{r['overlap']:.0f}%" if r["overlap"] is not None else "-",
+                       gb(r["size"]) if r["size"] else "-", r["state"]),
+        } for r in merged[:self.args.scene_rows * 4]]
+
         self.tv_scene.delete(*self.tv_scene.get_children())
-        if not merged:
+        if not scene_rows:
             self._insert(self.tv_scene, "none", "",
                          ("", "", "", f"최근 {self.args.days}일 한반도 촬영 없음",
                           "", "", ""))
-        for r in merged[:self.args.scene_rows * 4]:
-            ov = f"{r['overlap']:.0f}%" if r["overlap"] is not None else "-"
-            self._insert(self.tv_scene, self.TAGS.get(r["state"], ""), r["name"],
-                         (kst_hm(r["when"]), r["sid"], r["orbit"], r["where"], ov,
-                          gb(r["size"]) if r["size"] else "-", r["state"]))
+        for row in self._sorted(self.tv_scene, scene_rows, SCENE_SORT):
+            self._insert(self.tv_scene, row["tag"], row["name"], row["values"])
 
         # 전처리 ---------------------------------------------------------------
-        self.tv_proc.delete(*self.tv_proc.get_children())
+        proc_rows = []
         for key in sorted(st.busy, key=lambda k: st.busy[k][1]):
             name, started, stale = st.busy[key]
             out_tif = self.args.out_dir / (Path(name).stem + self.args.out_suffix + ".tif")
             written = gb(out_tif.stat().st_size) if out_tif.exists() else "-"
-            self._insert(self.tv_proc, "hot" if stale else "run", name,
-                         ("중단?" if stale else "처리중", sid_label(name), kst_of(name),
-                          f"{ago(started)} 시작 · {written} 기록"))
-        if not st.busy:
-            self._insert(self.tv_proc, "none", "",
-                         ("", "", "", "지금 굽는 씬 없음"))
+            proc_rows.append(self._proc_row(
+                "중단?" if stale else "처리중", name, "hot" if stale else "run",
+                f"{ago(started)} 시작 · {written} 기록"))
         for key in sorted(pending, reverse=True)[:self.args.proc_rows]:
             path, mtime, size = st.zips[key]
-            self._insert(self.tv_proc, "", path.name,
-                         ("대기", sid_label(path.name), kst_of(path.name), gb(size)))
+            proc_rows.append(self._proc_row("대기", path.name, "", gb(size)))
         for key, (path, mtime, size) in sorted(
                 st.outs.items(), key=lambda kv: -kv[1][1])[:self.args.proc_rows]:
-            self._insert(self.tv_proc, "done", path.name,
-                         ("완료", sid_label(path.name), kst_of(path.name),
-                          f"{gb(size)} · {ago(mtime)}"))
+            proc_rows.append(self._proc_row(
+                "완료", path.name, "done", f"{gb(size)} · {ago(mtime)}"))
+
+        self.tv_proc.delete(*self.tv_proc.get_children())
+        if not st.busy:
+            self._insert(self.tv_proc, "none", "", ("", "", "", "지금 굽는 씬 없음"))
+        for row in self._sorted(self.tv_proc, proc_rows, PROC_SORT):
+            self._insert(self.tv_proc, row["tag"], row["name"], row["values"])
+
+    @staticmethod
+    def _proc_row(state: str, name: str, tag: str, info: str) -> dict:
+        key = scene_key(name)
+        return {"tag": tag, "name": name, "state": state,
+                "sid": sid_label(name), "obs": key[0] if key else "",
+                "values": (state, sid_label(name), kst_of(name), info)}
 
     def _insert(self, tv, tag: str, name: str, values) -> None:
         """줄 하나 추가 + 더블클릭 복사용으로 씬 파일명을 기억해 둔다."""

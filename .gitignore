@@ -90,3 +90,9 @@ _chain*.ps1
 # 실험·벤치마크 산출물(래스터). README 만 추적한다 — experiments/README_KR.md
 experiments/*
 !experiments/README_KR.md
+
+# PyInstaller 배포본(SentinelObservationPlan.exe 262 MB). *.zip 은 위에서 이미
+# 무시되지만 exe 는 걸리지 않아, `git add -A` 한 번이면 262 MB 바이너리가
+# 커밋된다(GitHub 파일당 100 MB 한도에 걸려 push 도 막힌다). 소스가 저장소에
+# 없으므로 산출물만 두는 폴더다 — CSV 3개는 입력 자료라 추적한다.
+SentinelObservationPlan/*.exe
