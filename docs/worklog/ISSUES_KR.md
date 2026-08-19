@@ -617,3 +617,47 @@ POEORB(정밀궤도)는 관측 **약 20일 후** 공개된다. 08-02~08-13 관�
 > 두 값의 간격이 10배 이상이라 경계가 애매하지 않다. **"한 자릿수면 불량"**이
 > 식에 가장 덜 민감한 규칙이라 이걸 1차 판정으로 쓴다.
 
+## #21 🟢 gh 가 PATH 에 없고 토큰은 파일이 아니라 OS 키링에 있다
+
+### 증상
+
+이슈를 등록하려는데 `gh` 도 토큰도 "없는" 것으로 보였다. **둘 다 실제로는
+있었다** — 찾는 방식이 틀렸을 뿐이다.
+
+| 확인한 것 | 결과 | 실제 |
+| --- | --- | --- |
+| `Get-Command gh` | 못 찾음 | **설치돼 있음** (`C:\Program Files\GitHub CLI\gh.exe`, v2.97.0) |
+| `$env:GH_TOKEN` · `$env:GITHUB_TOKEN` | 비어 있음 | 환경변수를 안 쓸 뿐 |
+| `hosts.yml` | 사용자명만 있고 토큰 없음 | **토큰은 Windows 자격 증명 관리자(keyring)** |
+
+### 원인
+
+1. **PATH 문제** — winget 설치 직후 셸은 PATH 가 갱신되지 않는다.
+   `Get-Command gh` 실패를 **"미설치"로 읽으면 안 된다.**
+2. **gh 2.x 는 토큰을 `hosts.yml` 이 아니라 OS 키링에 저장한다.** 그래서
+   파일시스템을 `ghp_`/`github_pat_` 로 grep 해도 아무것도 안 나온다.
+
+### 확인 방법 — 파일을 뒤지지 말고 gh 에게 물어본다
+
+```powershell
+& "C:\Program Files\GitHub CLI\gh.exe" auth status
+#   ✓ Logged in to github.com account Ha-eunYu (keyring)
+#   - Token: gho_****   - Token scopes: 'gist', 'read:org', 'repo', 'workflow'
+```
+
+토큰은 **`gho_`**(= `gh auth login` 이 받은 OAuth 토큰)이고 scope 에 **`repo`** 가
+있어 **이슈 읽기·쓰기·닫기가 전부 된다. PAT 를 새로 발급할 필요가 없었다.**
+
+### 조치
+
+[create_issues.ps1](../../scripts/create_issues.ps1) 은 이미 PATH 실패를 대비한
+표준 경로 fallback 을 갖고 있어 **수정 없이 동작했다.**
+
+### 규칙
+
+1. **`gh` 를 PATH 로만 찾지 않는다.** 표준 설치 경로를 함께 뒤진다.
+2. **토큰을 파일에서 찾지 않는다.** `gh auth status` 로 확인한다.
+3. **PAT 를 새로 만들기 전에 `gh auth status` 부터 본다.** 이번에도 발급 직전까지
+   갔지만 필요 없었다.
+4. 토큰을 `.env` 에 쓰지 않는다 — 이 저장소의 `.env` 는 유출 이력이 있다.
+
