@@ -11,5 +11,11 @@
     "11_powershell_korean_encoding.md":  9,
     "12_relative_orbit_offset.md":  10,
     "13_external_dem_extent.md":  11,
-    "14_powershell_file_args.md":  12
+    "14_powershell_file_args.md":  12,
+    "15_safe_zip_scene_pattern.md":  13,
+    "16_scene_id_product_hash.md":  14,
+    "17_peninsula_dem_extent.md":  15,
+    "18_stac_summary_geometry.md":  16,
+    "19_poeorb_resorb_fallback.md":  17,
+    "20_compression_qc_formula.md":  18
 }

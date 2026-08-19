@@ -21,12 +21,19 @@
       # 또는 저장소 1개짜리 fine-grained PAT (Issues: Read and write):
       #   $env:GH_TOKEN = "github_pat_..."
 
+  -Sync 를 주면 **이미 등록된 이슈도 문서 기준으로 덮어쓴다**(본문·라벨·상태).
+  ISSUES_KR.md 가 정본이므로, 문서를 고쳤으면 -Sync 로 GitHub 을 맞춘다.
+  각 항목의 state 는 문서의 상태 표시와 맞춘다 — 🟢 해결이면 "closed".
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts/create_issues.ps1 -DryRun
   powershell -ExecutionPolicy Bypass -File scripts/create_issues.ps1
+  powershell -ExecutionPolicy Bypass -File scripts/create_issues.ps1 -Sync -DryRun
+  powershell -ExecutionPolicy Bypass -File scripts/create_issues.ps1 -Sync
 #>
 param(
     [switch]$DryRun,
+    [switch]$Sync,
     [string]$Repo = "Ha-eunYu/Sentinel-1_pipline"
 )
 
@@ -64,20 +71,35 @@ $issues = @(
     @{ file = "09_wet_soil_overestimation.md"
        title = "26년 7/14 두 궤도가 젖은 토양으로 과대추정 (+39% / +17%)"
        labels = @("analysis", "data-quality") },
-    @{ file = "11_powershell_korean_encoding.md"
+    @{ file = "11_powershell_korean_encoding.md"; state = "closed"
        title = "PowerShell 한글 인코딩 — .ps1 BOM과 네이티브 인자 코드페이지"
        labels = @("tooling") },
-    @{ file = "12_relative_orbit_offset.md"
+    @{ file = "12_relative_orbit_offset.md"; state = "closed"
        title = "절대궤도 175배수 산술로 상대궤도를 판단해 25/26년 짝을 잘못 지음 (S1C 오프셋 변경)"
        labels = @("data-quality", "analysis") },
     @{ file = "13_external_dem_extent.md"
        title = "external DEM 범위가 산출물마다 달라 제주·남해안이 빠진 씬이 섞임"
        labels = @("data-quality", "snap") },
-    @{ file = "14_powershell_file_args.md"
+    @{ file = "14_powershell_file_args.md"; state = "closed"
        title = "PowerShell -File 인자 변환과 Wait-Process 9시간 한도"
        labels = @("tooling") },
-    @{ file = "15_safe_zip_scene_pattern.md"
+    @{ file = "15_safe_zip_scene_pattern.md"; state = "closed"
        title = ".SAFE.zip 입력의 산출물명이 씬 ID 패턴에서 빠져 재처리가 조용히 건너뛰어짐"
+       labels = @("tooling", "data-quality") },
+    @{ file = "16_scene_id_product_hash.md"; state = "closed"
+       title = "씬 ID 끝 4자리는 제품 해시 — CDSE 목록과 대조하면 같은 촬영을 다르게 셈"
+       labels = @("data-quality", "tooling") },
+    @{ file = "17_peninsula_dem_extent.md"
+       title = "external DEM이 남한 전용 범위(39.9N)라 북한 프레임이 통째로 결측"
+       labels = @("data-quality", "snap") },
+    @{ file = "18_stac_summary_geometry.md"; state = "closed"
+       title = "STAC 요약에 geometry가 없어 한반도 footprint 판정이 항상 0장"
+       labels = @("tooling", "data-quality") },
+    @{ file = "19_poeorb_resorb_fallback.md"
+       title = "POEORB 미공개 시 RESORB로 조용히 대체 — continueOnFail=false가 막지 못함"
+       labels = @("snap", "data-quality") },
+    @{ file = "20_compression_qc_formula.md"
+       title = "압축률 QC 기준이 화소당 2바이트로 계산돼 실제의 2배 — 정상 산출물을 지울 위험"
        labels = @("tooling", "data-quality") }
 )
 
@@ -121,7 +143,27 @@ foreach ($i in $issues) {
     $bodyPath = Join-Path $root "temp/issues/$($i.file)"
     if (-not (Test-Path $bodyPath)) { Write-Warning "본문 없음: $bodyPath"; continue }
     if ($map.ContainsKey($i.file)) {
-        "건너뜀(#$($map[$i.file]) 로 등록됨): $($i.file)"
+        $num = $map[$i.file]
+        if (-not $Sync) { "건너뜀(#$num 로 등록됨): $($i.file)"; continue }
+
+        # --- 동기화: 문서가 정본이므로 본문·라벨·상태를 GitHub 에 덮어쓴다 -----
+        $want = "open"
+        if ($i.state) { $want = $i.state }
+        $body = [System.IO.File]::ReadAllText($bodyPath, [System.Text.Encoding]::UTF8)
+        $cur = & $gh api "repos/$Repo/issues/$num" | Out-String | ConvertFrom-Json
+        $sameBody = (($cur.body -replace "`r", "") -eq ($body -replace "`r", ""))
+        if ($sameBody -and $cur.state -eq $want -and $cur.title -eq $i.title) {
+            "동일(#$num): $($i.file)"
+            continue
+        }
+        $patch = @{ title = $i.title; body = $body; labels = $i.labels; state = $want } |
+                 ConvertTo-Json -Depth 5
+        $patchPath = Join-Path $payloadDir (($i.file -replace '\.md$', '') + ".patch.json")
+        [System.IO.File]::WriteAllText($patchPath, $patch,
+            (New-Object System.Text.UTF8Encoding($false)))
+        if ($DryRun) { "[dry-run] 갱신 #$num  state=$want  $($i.file)"; continue }
+        & $gh api --method PATCH "repos/$Repo/issues/$num" --input $patchPath | Out-Null
+        "갱신 #$num (state=$want)  $($i.title)"
         continue
     }
     if ($existing -contains $i.title) { "건너뜀(같은 제목 존재): $($i.title)"; continue }
