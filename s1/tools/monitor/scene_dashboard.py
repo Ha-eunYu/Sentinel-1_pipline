@@ -498,6 +498,16 @@ def gb(size: int) -> str:
     return f"{size / 1024 ** 3:.2f} GB"
 
 
+def overlap_note(st: "LocalState", key) -> str:
+    """비고 칸에 붙일 ` · 한반도 85%`. 아직 안 쟀으면 빈 문자열.
+
+    대기·제외 줄에 이 숫자가 있어야 "왜 이건 빠졌나"를 그 자리에서 판단할 수
+    있다 — 제외의 근거가 곧 이 값이다.
+    """
+    ov = st.overlaps.get(key)
+    return f" · 한반도 {ov:.0f}%" if ov is not None else ""
+
+
 # --- 콘솔 출력(--once) -------------------------------------------------------
 
 def plan_rows_for_once(args) -> tuple[list[dict], str]:
@@ -553,9 +563,9 @@ def render_text(rows: list[dict], st: LocalState, fetched: str, args) -> str:
             f"{r.get('note', '')}")
 
     add("")
-    n_skip = sum(1 for k in st.zips if st.state_of(k, args.min_overlap) == "제외")
+    excluded = [k for k in st.zips if st.state_of(k, args.min_overlap) == "제외"]
     add(f"■ 전처리({rel(args.out_dir)}) — 대기 {len(pending)} · 처리중 {len(busy)}"
-        f" · 완료 {len(st.outs)}" + (f" · 제외 {n_skip}" if n_skip else "")
+        f" · 완료 {len(st.outs)}" + (f" · 제외 {len(excluded)}" if excluded else "")
         + (f" · 중단? {len(stalled)}" if stalled else "")
         + (f"   [gpt {st.gpt_procs}개 실행 중]" if st.gpt_procs > 0 else ""))
     for key in sorted(st.busy, key=lambda k: st.busy[k][1]):
@@ -565,7 +575,11 @@ def render_text(rows: list[dict], st: LocalState, fetched: str, args) -> str:
         add(f"  {'중단?' if stale else '처리중'}  {short_id(name)}  "
             f"{ago(started)} 시작 · {written} 기록")
     for key in sorted(pending, key=lambda k: k[0], reverse=True)[:args.proc_rows]:
-        add(f"  대기    {short_id(st.zips[key][0].name)}")
+        add(f"  대기    {short_id(st.zips[key][0].name)}"
+            f"{overlap_note(st, key)}")
+    for key in sorted(excluded, reverse=True)[:args.proc_rows]:
+        add(f"  제외    {short_id(st.zips[key][0].name)}"
+            f"{overlap_note(st, key)}")
     done = sorted(st.outs.items(), key=lambda kv: -kv[1][1])[:args.proc_rows]
     for key, (path, mtime, size) in done:
         add(f"  완료    {short_id(path.name)}  {gb(size)}  ({ago(mtime)})")
@@ -832,8 +846,9 @@ class Dashboard:
         pending = [k for k in st.zips
                    if st.state_of(k, self.args.min_overlap) == "대기"]
         n_new = sum(1 for r in merged if r["state"] == "미수신")
-        n_skip = sum(1 for k in st.zips
-                     if st.state_of(k, self.args.min_overlap) == "제외")
+        excluded = [k for k in st.zips
+                    if st.state_of(k, self.args.min_overlap) == "제외"]
+        n_skip = len(excluded)
         self.names.clear()
 
         scanned = (datetime.fromtimestamp(st.scanned, KST).strftime("%H:%M:%S")
@@ -890,7 +905,14 @@ class Dashboard:
                 f"{ago(started)} 시작 · {written} 기록"))
         for key in sorted(pending, reverse=True)[:self.args.proc_rows]:
             path, mtime, size = st.zips[key]
-            proc_rows.append(self._proc_row("대기", path.name, "", gb(size)))
+            proc_rows.append(self._proc_row(
+                "대기", path.name, "", f"{gb(size)}{overlap_note(st, key)}"))
+        # 제외도 목록으로 보여 준다 — 개수만 세면 "무엇이 왜 빠졌나"를 확인할
+        # 방법이 없어, 잘못 걸러진 씬이 조용히 묻힌다.
+        for key in sorted(excluded, reverse=True)[:self.args.proc_rows]:
+            path, mtime, size = st.zips[key]
+            proc_rows.append(self._proc_row(
+                "제외", path.name, "none", f"{gb(size)}{overlap_note(st, key)}"))
         for key, (path, mtime, size) in sorted(
                 st.outs.items(), key=lambda kv: -kv[1][1])[:self.args.proc_rows]:
             proc_rows.append(self._proc_row(
@@ -898,7 +920,9 @@ class Dashboard:
 
         self.tv_proc.delete(*self.tv_proc.get_children())
         if not st.busy:
-            self._insert(self.tv_proc, "none", "", ("", "", "", "지금 굽는 씬 없음"))
+            # 칸 수(5)에 맞춰야 안내 문구가 '상태' 칸에 끼어 잘리지 않는다.
+            self._insert(self.tv_proc, "none", "",
+                         ("", "", "", "", "지금 굽는 씬 없음"))
         for row in self._sorted(self.tv_proc, proc_rows, PROC_SORT):
             self._insert(self.tv_proc, row["tag"], row["name"], row["values"])
         self._after_fill(self.tv_proc, self._sorted(self.tv_proc, proc_rows, PROC_SORT))
