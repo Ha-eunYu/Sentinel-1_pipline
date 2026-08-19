@@ -18,8 +18,14 @@
   전제: GitHub CLI 설치 + 인증
       winget install --id GitHub.cli
       gh auth login
-      # 또는 저장소 1개짜리 fine-grained PAT (Issues: Read and write):
-      #   $env:GH_TOKEN = "github_pat_..."
+
+  ⚠ gh·토큰을 못 찾겠거든 (ISSUES_KR #21)
+  - `Get-Command gh` 실패 = 미설치가 아니다. PATH 에 없을 뿐이다.
+    실제 위치: "C:\Program Files\GitHub CLI\gh.exe" (아래 fallback 이 처리한다)
+  - **토큰은 hosts.yml 이 아니라 Windows 자격 증명 관리자(keyring)에 있다.**
+    파일을 grep 해도 안 나온다. `gh auth status` 로 확인할 것.
+  - `gh auth login` 으로 받은 gho_ 토큰의 scope 에 `repo` 가 있으면
+    **이슈 읽기·쓰기·닫기가 다 된다. PAT 를 새로 발급할 필요 없다.**
 
   -Sync 를 주면 **이미 등록된 이슈도 문서 기준으로 덮어쓴다**(본문·라벨·상태).
   ISSUES_KR.md 가 정본이므로, 문서를 고쳤으면 -Sync 로 GitHub 을 맞춘다.
@@ -100,7 +106,10 @@ $issues = @(
        labels = @("snap", "data-quality") },
     @{ file = "20_compression_qc_formula.md"
        title = "압축률 QC 기준이 화소당 2바이트로 계산돼 실제의 2배 — 정상 산출물을 지울 위험"
-       labels = @("tooling", "data-quality") }
+       labels = @("tooling", "data-quality") },
+    @{ file = "21_gh_path_and_keyring.md"; state = "closed"
+       title = "gh 가 PATH 에 없고 토큰은 파일이 아니라 OS 키링에 있다 — PAT 발급 불필요"
+       labels = @("tooling") }
 )
 
 # gh 찾기. 설치 직후 열려 있던 셸은 PATH가 갱신되지 않아 Get-Command 로는 못
