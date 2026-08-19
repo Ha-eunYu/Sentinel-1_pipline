@@ -903,18 +903,21 @@ class Dashboard:
             proc_rows.append(self._proc_row(
                 "중단?" if stale else "처리중", name, "hot" if stale else "run",
                 f"{ago(started)} 시작 · {written} 기록"))
-        for key in sorted(pending, reverse=True)[:self.args.proc_rows]:
+        # 보이는 줄 수보다 넉넉히 담고 나머지는 스크롤로 본다 — 배치 하나가
+        # 19씬이면 8줄만 넣을 경우 절반이 화면에서 사라진다(2026-08-19).
+        room = self.args.proc_rows * 5
+        for key in sorted(pending, reverse=True)[:room]:
             path, mtime, size = st.zips[key]
             proc_rows.append(self._proc_row(
                 "대기", path.name, "", f"{gb(size)}{overlap_note(st, key)}"))
         # 제외도 목록으로 보여 준다 — 개수만 세면 "무엇이 왜 빠졌나"를 확인할
         # 방법이 없어, 잘못 걸러진 씬이 조용히 묻힌다.
-        for key in sorted(excluded, reverse=True)[:self.args.proc_rows]:
+        for key in sorted(excluded, reverse=True)[:room]:
             path, mtime, size = st.zips[key]
             proc_rows.append(self._proc_row(
                 "제외", path.name, "none", f"{gb(size)}{overlap_note(st, key)}"))
         for key, (path, mtime, size) in sorted(
-                st.outs.items(), key=lambda kv: -kv[1][1])[:self.args.proc_rows]:
+                st.outs.items(), key=lambda kv: -kv[1][1])[:room]:
             proc_rows.append(self._proc_row(
                 "완료", path.name, "done", f"{gb(size)} · {ago(mtime)}"))
 
