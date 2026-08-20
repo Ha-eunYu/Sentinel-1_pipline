@@ -7,6 +7,7 @@
 관련: [PROCESS_202507_202607_KR.md](PROCESS_202507_202607_KR.md)(전 과정 서술) ·
 [FILTER_COMPARISON_KR.md](FILTER_COMPARISON_KR.md)(필터 근거) ·
 [BASELINE_DESIGN_KR.md](../drought/BASELINE_DESIGN_KR.md)(비교 설계) ·
+**[BBOX_RANGES_KR.md](BBOX_RANGES_KR.md)(범위값 정본 — 검색 bbox·DEM clip·판정 경계)** ·
 [ISSUES_KR.md](../worklog/ISSUES_KR.md)
 
 ---
@@ -78,6 +79,9 @@ conda run -n s1_snappy python -m s1.tools.dem.make_basin_dem \
 - 여유를 0.5°쯤 두는 이유: 프레임 가장자리가 DEM 밖으로 나가면 그만큼 무효가
   된다. 반대로 DEM이 넓어도 처리 시간에는 거의 영향이 없다 — SNAP은 DEM 전체를
   올리지 않고 **씬 footprint에 걸치는 타일만** 읽는다(실측: 2-1절).
+- ⚠ **검색 bbox 와 DEM 범위는 다른 물건이다.** 검색은 더 넓어야 한다 —
+  둘을 같게 맞추면 프레임 가장자리가 DEM 밖으로 나가 무효가 된다.
+  저장소에 흩어진 범위값 9종의 용도별 정리는 [BBOX_RANGES_KR.md](BBOX_RANGES_KR.md).
 
 ---
 

@@ -9,7 +9,8 @@
 
 관련: [TODO_KR.md](TODO_KR.md)(할 일) · [PROGRESS_KR.md](PROGRESS_KR.md)(진행상황) ·
 [WORKLOG_20260818_KR.md](WORKLOG_20260818_KR.md)(최근 작업일지) ·
-**[PREPROCESSING_SPEC_KR.md](../pipeline/PREPROCESSING_SPEC_KR.md)(전처리 규격 정본)**
+**[PREPROCESSING_SPEC_KR.md](../pipeline/PREPROCESSING_SPEC_KR.md)(전처리 규격 정본)** ·
+**[BBOX_RANGES_KR.md](../pipeline/BBOX_RANGES_KR.md)(범위값 정본 — #7·#13·#17 의 공통 배경)**
 
 > **2026-08-18 일괄 점검** — 사양서가 신설되면서 여기 이슈 여럿이 "규격으로
 > 확정"됐다. 각 이슈에 **현행 규격 위치**를 달았다. 규격과 이슈 본문이 다르면
