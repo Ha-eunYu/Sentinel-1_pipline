@@ -272,6 +272,10 @@ downloads/rtc_grd_frost_vh/<입력 zip stem>_rtc_db_vh.tif
 
 ## 7. 바뀌면 안 되는 것 (요약)
 
+> 아래 다섯 중 하나라도 바꾸려면 **PR 을 연다** — 기존 산출물 전체의 의미가
+> 바뀌기 때문이다. 기준과 PR 본문에 넣을 것은
+> [GIT_WORKFLOW_KR.md](../GIT_WORKFLOW_KR.md) 3절.
+
 1. **편파 VH** — VV와 섞지 않는다(약 6 dB 오프셋)
 2. **필터 Frost** — Refined Lee는 가는 수로를 절반 날린다
 3. **DEM `korea_peninsula_cop30.tif`** — 범위가 다른 DEM을 섞지 않는다
