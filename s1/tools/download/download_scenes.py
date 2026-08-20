@@ -23,6 +23,9 @@ from s1.stac.download_s1 import choose_download_url, download_odata_cdse_with_re
 from s1.stac.models import S1SearchConfig
 from s1.stac.search_s1 import list_s1_items_for_date
 
+# 기본은 남한 위주. **북한 프레임은 39.5N에서 잘린다** — rel 134 하강 패스처럼
+# 대부분이 북위 39.5도 위에 있는 프레임을 받으려면 `--bbox`로 넓혀야 한다
+# (한반도 전체는 124.0,32.8,131.5,43.5).
 BBOX = [125.0, 32.8, 131.0, 39.5]
 _KEY = re.compile(
     r"(S1[A-D]_[A-Z]{2}_[A-Z]{4}_\w{4}_\d{8}T\d{6}_\d{8}T\d{6}_\d{6}_\w{6})")
@@ -53,6 +56,9 @@ def main() -> None:
     ap.add_argument("--orbit", type=int, help="상대궤도로 한정 (예: 54)")
     ap.add_argument("--id", action="append", default=[],
                     help="씬 ID 4자리. 여러 번 줄 수 있다. 없으면 날짜·궤도 전부")
+    ap.add_argument("--bbox", default="",
+                    help="검색 bbox 'w,s,e,n'. 기본은 남한 위주라 북한 "
+                         "프레임이 잘린다. 한반도 전체는 124.0,32.8,131.5,43.5")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -67,7 +73,10 @@ def main() -> None:
     want = {s.strip().upper() for s in args.id}
 
     client = open_cdse_stac_client(CDSEConfig())
-    cfg = S1SearchConfig(bbox=BBOX, intersects_geojson=None,
+    bbox = [float(x) for x in args.bbox.split(",")] if args.bbox else BBOX
+    if len(bbox) != 4:
+        raise SystemExit("--bbox 는 'w,s,e,n' 네 값이어야 합니다")
+    cfg = S1SearchConfig(bbox=bbox, intersects_geojson=None,
                          collection="sentinel-1-grd", window_days=1,
                          max_items=300, instrument_mode="IW",
                          orbit_state=None, product_type=None, polarization=None)
