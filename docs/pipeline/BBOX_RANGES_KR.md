@@ -4,7 +4,8 @@
 **용도가 다르고, 섞어 쓰면 조용히 틀린다.** 헷갈릴 때 이 문서만 보면 된다.
 
 관련: [PREPROCESSING_SPEC_KR.md](PREPROCESSING_SPEC_KR.md)(전처리 규격 정본) ·
-[SCENE_MONITOR_KR.md](SCENE_MONITOR_KR.md) · [ISSUES_KR.md](../worklog/ISSUES_KR.md) #7 · #13 · #17
+[SCENE_MONITOR_KR.md](SCENE_MONITOR_KR.md) · [ISSUES_KR.md](../worklog/ISSUES_KR.md) #7 · #13 · #17 ·
+[FOREIGN_FRAME_COST_KR.md](FOREIGN_FRAME_COST_KR.md)(bbox 오판으로 버린 비용 집계)
 
 ---
 

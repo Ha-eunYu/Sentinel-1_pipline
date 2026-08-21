@@ -9,6 +9,10 @@ NAS(X드라이브) rsync로 예전에 제외했던 China/Japan 씬(CDFD/1CE4/F59
 근거 데이터였다는 것을 발견했다. 픽셀 단위로 직접 확인한 결과 두 건 모두
 **100% 바다(한반도 육지 겹침 0%)** — 침수 탐지가 아니라 아티팩트로 확정됐다.
 
+> 이 문서는 **2026-07-22 감사 한 건**의 경위다. 이후 재유입(07-23)과
+> 대마도 프레임(08-21)이 더해진 **누적 비용과 반복 원인**은
+> [FOREIGN_FRAME_COST_KR.md](FOREIGN_FRAME_COST_KR.md)에 모았다.
+
 ## 1. 방법
 
 `downloads/sentinel1_grd/`의 zip 79개 각각을 파일명에서 STAC item ID를

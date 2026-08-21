@@ -1,5 +1,8 @@
 # 위성영상 촬영 지역: bbox 대신 footprint로 판정 (2026-07)
 
+
+> bbox로 판정해 타국 프레임을 처리한 실제 비용은
+> [FOREIGN_FRAME_COST_KR.md](FOREIGN_FRAME_COST_KR.md) 참고.
 Sentinel-1 프레임이 "어디를 찍었나"를 **bbox(외접 사각형)가 아니라
 footprint(실제 촬영 폴리곤)** 로 판정하도록 파이프라인을 정리한 기록.
 흩어져 있던 로직을 재사용 모듈 [footprint_aoi.py](../../s1/footprint/footprint_aoi.py) 하나로
