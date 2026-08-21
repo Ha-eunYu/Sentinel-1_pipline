@@ -460,8 +460,15 @@ D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 
 
 ## 관련 문서
 
-- [PREPROCESSING_SPEC_KR.md](docs/pipeline/PREPROCESSING_SPEC_KR.md) — **확정 전처리 사양**:
-  한반도 DEM 선택 근거, VH·Frost·external DEM 파라미터 확정본, 바꾸면 안 되는 것
+- [PREPROCESSING_SPEC_KR.md](docs/pipeline/PREPROCESSING_SPEC_KR.md) — ⭐ **전처리 규격
+  정본**: DEM 선택 근거(한반도는 `korea_peninsula_cop30.tif`), 그래프 8단계, 확정
+  파라미터, 처리시간 실측(2-1절), POEORB→RESORB 대체(2-2절), 바꾸면 안 되는 것(7절)
+- [BBOX_RANGES_KR.md](docs/pipeline/BBOX_RANGES_KR.md) — ⭐ **한반도 범위값 정본**:
+  저장소에 흩어진 범위 9종을 용도별로 정리. **검색 bbox·DEM clip·판정 경계는 서로
+  다른 물건**이고 섞으면 조용히 틀린다. 남한 전용(위도 39.x)과 한반도(43.x) 구분
+- [GIT_WORKFLOW_KR.md](docs/GIT_WORKFLOW_KR.md) — **Git 작업 방침**: 기본은 main 직접
+  커밋, 실험 브랜치는 며칠 안에 머지(이름이 내용을 설명 못 하면 머지 신호),
+  **PR 기준은 "이미 만든 산출물의 의미가 바뀌는가"**(사양서 7절을 건드리면 PR)
 - [DOWNLOADS_LAYOUT_KR.md](docs/pipeline/DOWNLOADS_LAYOUT_KR.md) — **downloads/ 폴더 지도**:
   어느 폴더가 정본이고 무엇이 실험·대조군인지, 삭제 이력과 정리 규칙
 - [RELATIVE_ORBITS_KR.md](docs/pipeline/RELATIVE_ORBITS_KR.md) — **상대궤도 인벤토리**
@@ -470,8 +477,6 @@ D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 
   **26년 7·8월 관측 달력**: 날짜 × 상대궤도, 궤도 × 대권역 커버율, 실제 반복 주기
 - [ISSUES_KR.md](docs/worklog/ISSUES_KR.md) — **이슈 트래킹**: SNAP external DEM(VRT 불가·
   하구 결측), PowerShell stderr 오탐, 궤도번호 앞 0 유실, 미해결 항목 상태
-- [PREPROCESSING_SPEC_KR.md](docs/pipeline/PREPROCESSING_SPEC_KR.md) — **전처리 규격
-  정본**: DEM 선택 근거(한반도는 `korea_peninsula_cop30.tif`), 그래프 8단계, 확정 파라미터
 - [WORKLOG_20260818_KR.md](docs/worklog/WORKLOG_20260818_KR.md) — **최신**: 8월 남한 →
   한반도 확대, external DEM 재설계(북위 39.9° 한계), STAC footprint 누락 버그, KST 환산
 - [WORKLOG_20260814_KR.md](docs/worklog/WORKLOG_20260814_KR.md) — 상대궤도 재정립
