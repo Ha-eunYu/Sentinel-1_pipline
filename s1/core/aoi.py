@@ -35,7 +35,8 @@ from typing import Iterable
 
 import numpy as np
 
-from s1.core.paths import SOUTH_KOREA
+from s1.core.paths import (KOREA_PENINSULA, SOUTH_KOREA,
+                           SOUTH_KOREA_BASINS)
 from s1.footprint.footprint_aoi import load_exterior_rings, points_in_rings
 
 KML_RE = re.compile(r"<coordinates>(.*?)</coordinates>", re.S)
@@ -125,3 +126,52 @@ def south_korea_scenes(
         if pct >= min_pct:
             out[Path(z)] = pct
     return out
+
+# ---------------------------------------------------------------------------
+# 남 / 북 / 제3국 세 갈래 판정
+# ---------------------------------------------------------------------------
+# **"남한이 아님"은 "북한임"이 아니다.** 이분법으로 좁히면 대마도·중국·러시아
+# 프레임이 북한 칸에 조용히 섞인다 — 실제로 2026-08 대마도 2장이 그렇게 들어와
+# 받고 RTC까지 돌았다(FOREIGN_FRAME_COST_KR.md ③).
+#
+# STAC의 `item.geometry`는 **공칭** 폴리곤이라 대마도 프레임을 통과시킨다.
+# 여기서는 원본 zip의 `preview/map-overlay.kml`(실측)로만 판정한다.
+
+FOREIGN_MAX_PCT = 1.0        # 한반도 교차가 이 미만이면 제3국으로 본다
+
+
+def classify_region(
+    zip_path: Path | str,
+    *,
+    foreign_max_pct: float = FOREIGN_MAX_PCT,
+    south_min_pct: float = 0.5,
+    step_deg: float = GRID_STEP_DEG,
+) -> tuple[str, float, float]:
+    """이 프레임이 남한/북한/제3국 중 무엇인가.
+
+    반환 `(구분, 한반도%, 남한%)`. 구분은 `"남한" | "북한" | "제3국" | "판정불가"`.
+
+    - 한반도 교차가 `foreign_max_pct` 미만  -> **제3국** (일본·중국·러시아)
+    - 남한 교차가 `south_min_pct` 이상       -> 남한
+    - 그 외(한반도엔 걸치나 남한 아님)       -> 북한
+
+    footprint를 못 읽으면 `"판정불가"`를 돌려준다. 호출부는 이것을 **제외가
+    아니라 보류**로 다뤄야 한다 — 거르는 쪽으로 틀리면 멀쩡한 씬을 놓친다.
+    """
+    try:
+        pen = coverage_percent(zip_path, KOREA_PENINSULA, step_deg=step_deg)
+        sk = coverage_percent(zip_path, SOUTH_KOREA_BASINS, step_deg=step_deg)
+    except (FileNotFoundError, ValueError, KeyError, OSError) as e:
+        print(f"  footprint 판정 불가({Path(zip_path).name}: {e})")
+        return "판정불가", float("nan"), float("nan")
+    if pen < foreign_max_pct:
+        return "제3국", pen, sk
+    return ("남한" if sk >= south_min_pct else "북한"), pen, sk
+
+
+def is_foreign(zip_path: Path | str, **kw) -> bool:
+    """한반도를 전혀 안 찍은 프레임인가(일본·중국·러시아 전용).
+
+    판정불가는 **False**를 돌려준다(보류 = 격리하지 않음).
+    """
+    return classify_region(zip_path, **kw)[0] == "제3국"

@@ -63,6 +63,9 @@ WATER_AREA_CSV = WATER_OTSU_DIR / "water_area_perrow.csv"
 GEOJSON_DIR = PROJECT_DIR / "geojson"
 KOREA_PENINSULA = GEOJSON_DIR / "Korea_Peninsula.geojson"
 SOUTH_KOREA = GEOJSON_DIR / "South_Korea.geojson"   # ⚠ 해안·도서 제외 (ISSUES_KR #7)
+# 남한 판정 **정본**. 대권역 21개 union이라 해안·도서·제주를 다 담는다.
+# `SOUTH_KOREA`는 부산·강릉·여수·완도·제주가 빠져 판정에 쓰면 안 된다.
+SOUTH_KOREA_BASINS = GEOJSON_DIR / "South_Korea_basins.geojson"
 NORTH_KOREA = GEOJSON_DIR / "NK.geojson"
 KOREA_FLOOD_AOI = GEOJSON_DIR / "Korea_flood_AOI.geojson"
 GRAPHS_DIR = PROJECT_DIR / "graphs"

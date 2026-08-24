@@ -187,7 +187,7 @@ Stop-Job -Name s1mon; Remove-Job -Name s1mon
 
 ## 5. ⚠ 한계 — 알고 쓰지 않으면 틀린 알림을 받는다
 
-### 5-1. ✅ 중국·일본 오탐 — 해결됨 (2026-08-18)
+### 5-1. ⚠ 중국·일본 오탐 — **감시 도구에서만** 해결됨 (2026-08-18)
 
 예전에는 **bbox 사각형만 쓰고 footprint 교차를 보지 않아** 규슈·산둥 프레임이
 "신규 한반도 촬영"으로 알림이 떴다. 그날 실행에서 **알림 3건이 전부 오탐**이었다.
@@ -202,11 +202,25 @@ Stop-Job -Name s1mon; Remove-Job -Name s1mon
 로그에 `[footprint 제외] ...(0.0%)` 로 남으므로, 필터가 과하게 자르는지도
 눈으로 확인할 수 있다.
 
+> ⚠️ **이 수정은 `monitor_new_scenes.py` 에만 들어갔다.** 다운로드 경로
+> (`search_s1.touches_korea` → `footprint_intersects`)는 **`> 0` 이면
+> 통과**라 1% 문턱이 없다. 그 결과 2026-08-21 에 대마도 프레임 2장을 받아
+> RTC 까지 돌렸다 — [ISSUES #22](../worklog/ISSUES_KR.md).
+>
+> 게다가 STAC 이 주는 geometry 는 **공칭**이라 실측(zip KML)과 다르다.
+> 대마도 프레임은 공칭으로 살짝 겹치고 실측으로는 0.00% 다
+> ([ISSUES #23](../worklog/ISSUES_KR.md)). 확실히 거르려면 **받은 직후
+> KML 재판정**이 필요하다.
+
 ### 5-2. ✅ 북한 북부 누락 — 해결됨 (2026-08-18)
 
 기본 bbox 북쪽 한계가 **40.0°N**이라 북한 북부(40~43°N)를 통째로 놓치고 있었다.
 한반도 전체가 대상이 되면서 **`123.5 32.0 131.5 43.5`로 넓혔다.** 넓힌 만큼
 들어오는 중국 동북부·러시아 연해주 프레임은 5-1의 footprint 필터가 걷어낸다.
+
+> ⚠️ **이 전제가 다운로드 경로에서는 성립하지 않았다.** 5-1 필터가 거기엔
+> 없었기 때문이다. **두 수정이 서로를 믿고 있었고 한쪽이 비어 있었다** —
+> bbox 를 넓히는 변경은 **거르는 쪽을 같이 확인**해야 한다.
 
 ### 5-3. 카탈로그 등재 지연 3~6시간
 
@@ -248,8 +262,11 @@ python -m s1.tools.monitor.monitor_new_scenes --collection sentinel-1-slc \
 
 이어지는 절차:
 
-1. **한반도를 실제로 찍었는지 확인**(5-1 때문에 필수) — 다운로드 도구가
-   footprint로 다시 거르므로 그냥 아래를 돌리면 된다.
+1. **한반도를 실제로 찍었는지 확인**(5-1 때문에 필수).
+   ⚠️ 예전 이 자리에는 *"다운로드 도구가 footprint 로 다시 거르므로 그냥
+   돌리면 된다"* 고 적혀 있었으나 **사실이 아니었다**(ISSUES #22).
+   다운로드 뒤 `s1.core.aoi.classify_region` 으로 남한/북한/제3국을
+   판정하고, 제3국은 `downloads/excluded_china_japan/` 으로 격리한다.
 2. 수집: `python -m s1.tools.download.download_korea_missing 202608`
 3. 전처리: [PREPROCESSING_SPEC_KR.md](PREPROCESSING_SPEC_KR.md)의 확정 파라미터로
    `batch_grd_rtc_frost --dem downloads/dem_basin/korea_peninsula_cop30.tif`
@@ -259,8 +276,8 @@ python -m s1.tools.monitor.monitor_new_scenes --collection sentinel-1-slc \
 | 항목 | 상태 |
 | --- | --- |
 | 래퍼 경로 버그 | ✅ 수정 — 재구성 이후 저장소 루트의 없는 파일을 부르고 있었다 |
-| 중국·일본 오탐 | ✅ 해결 — footprint 겹침 1% 필터 |
-| 북한 북부 누락 | ✅ 해결 — bbox 43.5°N 까지 |
+| 중국·일본 오탐 | ⚠ **감시 도구만** 해결 — 다운로드 경로는 문턱 없음 (ISSUES #22·#23) |
+| 북한 북부 누락 | ✅ 해결 — bbox 43.5°N 까지 (단 제3국 유입은 위 항목에 의존) |
 | 의존성 | ✅ 표준 라이브러리만 — `s1.core.paths`·shapely·numpy 모두 제거 |
 | 인터프리터 | ✅ 자동 탐색 — conda 없이도 실행 |
 | 알림 내용 | ✅ UTC·KST·상대궤도·한반도 겹침% 표시 |

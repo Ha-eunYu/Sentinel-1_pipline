@@ -16,7 +16,9 @@ from __future__ import annotations
 import argparse
 import re
 import time
+from pathlib import Path
 
+from s1.core.aoi import classify_region
 from s1.core.config import CDSEConfig, OutputConfig, load_env
 from s1.stac.client import open_cdse_stac_client
 from s1.stac.download_s1 import choose_download_url, download_odata_cdse_with_retry
@@ -59,6 +61,8 @@ def main() -> None:
     ap.add_argument("--bbox", default="",
                     help="검색 bbox 'w,s,e,n'. 기본은 남한 위주라 북한 "
                          "프레임이 잘린다. 한반도 전체는 124.0,32.8,131.5,43.5")
+    ap.add_argument("--no-verify-footprint", action="store_true",
+                    help="받은 직후 KML 재판정을 건너뛴다. 권장하지 않는다 — STAC 공칭 geometry는 대마도·중러 프레임을 통과시킨다(ISSUES #23)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -114,6 +118,7 @@ def main() -> None:
 
     print()
     ok = err = 0
+    downloaded: list[Path] = []
     for i, c in enumerate(todo, 1):
         f = dl / f"{c['id']}.zip"
         if f.exists():
@@ -125,11 +130,39 @@ def main() -> None:
             download_odata_cdse_with_retry(url, f)
             print(f"[{i}/{len(todo)}] {f.stat().st_size / 1e6:>5.0f} MB  "
                   f"{c['id'][-18:]}", flush=True)
+            downloaded.append(f)
             ok += 1
         except Exception as e:                              # noqa: BLE001
             print(f"[{i}/{len(todo)}] 실패 {c['id'][-18:]}: {e}", flush=True)
             err += 1
     print(f"\n완료 {ok} · 실패 {err}")
+
+    # ── 받은 직후 KML 재판정 → 제3국 격리 ──────────────────────────────
+    #
+    # 검색 단계에서는 못 막는다. STAC이 주는 geometry는 **공칭**이라 대마도
+    # 프레임이 한반도에 살짝 걸친 것으로 나오고, KML 실측으로만 0.00%가
+    # 드러나는데 KML은 zip을 받아야 볼 수 있다(ISSUES #23). 그래서 받은 뒤 거른다.
+    #
+    # 검색 bbox는 넓게 두는 것이 맞다 — 놓치면 복구가 안 된다
+    # (BBOX_RANGES_KR.md 규칙 1). 좁히는 일을 여기서 한다.
+    if args.no_verify_footprint or not downloaded:
+        return
+    print()
+    print("KML 실측 footprint 재판정")
+    quarantine = out.out_dir / "excluded_china_japan"
+    moved = 0
+    for f in downloaded:
+        kind, pen, sk = classify_region(f)
+        mark = ""
+        if kind == "제3국":
+            quarantine.mkdir(parents=True, exist_ok=True)
+            f.replace(quarantine / f.name)
+            moved += 1
+            mark = "  → excluded_china_japan/ 격리"
+        print(f"  {f.name[-18:]}  {kind}  한반도 {pen:6.2f}%  남한 {sk:6.2f}%{mark}")
+    if moved:
+        print()
+        print(f"⚠ 제3국 프레임 {moved}장 격리 — 한반도 교차 1% 미만이라 처리 대상이 아니다.")
 
 
 if __name__ == "__main__":
