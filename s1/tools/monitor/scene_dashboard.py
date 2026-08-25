@@ -41,8 +41,16 @@ STAC를 다시 읽어 **실제 상태 그대로** 그린다(기록을 따로 남
 배치 러너(`s1/preprocess/batch_runner.py`)가 씬마다 zip을 SSD 임시 하위폴더로
 복사해 두고 끝나면 지우므로, 그 폴더가 곧 "지금 굽는 중"이라는 증거다.
 
-배치가 비정상 종료하면 임시폴더가 남는다. `gpt.exe`가 하나도 없고 그 폴더가
-`--stale-minutes`(기본 30분)보다 오래됐으면 **중단?** 으로 표시한다.
+배치가 비정상 종료하면 임시폴더가 남는다. 셋으로 갈린다.
+
+- 그 씬을 나중에 다시 구워 **산출물이 완성돼 있고**(mtime이 `--idle-minutes`
+  넘게 멈춤) 그 시각이 폴더 생성보다 뒤면 → **잔여 임시폴더**. 처리중으로 세지
+  않고 "지워도 된다"고 따로 알린다(2026-08-25: 엿새 된 폴더 2개가 계속
+  '처리중'으로 보였다).
+- `gpt.exe`가 하나도 없고 `--stale-minutes`(기본 30분)를 넘겼으면 → **중단?**
+- gpt가 돌고 있어도 `--stale-hours`(기본 6시간)를 넘겼으면 → **중단?**
+  (씬 하나 실측 최장이 107분이라, 그보다 오래면 다른 씬의 gpt를 보고 오해하는
+  중이다)
 
 씬 대조 키
 ----------
@@ -164,6 +172,7 @@ class LocalState:
     busy: dict = field(default_factory=dict)        # key -> (파일명, 시작시각, stale)
     parts: dict = field(default_factory=dict)       # key -> (Path, mtime, size)
     overlaps: dict = field(default_factory=dict)    # key -> 한반도 겹침%(zip footprint)
+    orphans: list = field(default_factory=list)     # [(임시폴더, 생성시각, zip크기)]
     gpt_procs: int = 0                              # -1 = 확인 실패
     scanned: float = 0.0
 
@@ -204,7 +213,8 @@ def gpt_process_count() -> int:
         return -1                                            # 확인 불가
 
 
-def scan_local(out_dir: Path, out_suffix: str, stale_minutes: int = 30) -> LocalState:
+def scan_local(out_dir: Path, out_suffix: str, stale_minutes: int = 30,
+               stale_hours: float = 6.0, idle_minutes: float = 10.0) -> LocalState:
     """다운로드·산출물·임시폴더를 훑어 현재 상태를 만든다."""
     st = LocalState(scanned=time.time())
     st.gpt_procs = gpt_process_count()
@@ -249,7 +259,29 @@ def scan_local(out_dir: Path, out_suffix: str, stale_minutes: int = 30) -> Local
             key = scene_key(z.name)
             if not key:
                 continue
-            stale = st.gpt_procs == 0 and now - started > stale_minutes * 60
+            # **끝난 씬의 잔여 폴더인가?** 배치가 비정상 종료하면 임시폴더가
+            # 남는데, 그 씬을 나중에 다시 구워 산출물이 생겨도 폴더는 그대로다.
+            # 산출물 mtime이 폴더 생성시각보다 뒤면 그 씬은 이미 끝난 것이므로
+            # '처리중'으로 세면 안 된다(2026-08-25: 525F·1571이 엿새째 처리중으로
+            # 보였다). 폴더는 남아 디스크만 먹으므로 따로 알린다.
+            #
+            # ⚠ "산출물이 있으면 끝난 것"으로 보면 안 된다 — gpt는 굽는 내내 그
+            # tif를 쓴다. 그래서 **더 이상 쓰이지 않는지**(mtime이 idle_minutes
+            # 넘게 멈췄는지)까지 봐야 지금 굽는 씬과 갈린다.
+            out_tif = out_dir / f"{Path(z.name).stem}{out_suffix}.tif"
+            out_mtime = out_tif.stat().st_mtime if out_tif.exists() else 0.0
+            done_after = (out_mtime >= started
+                          and now - out_mtime > idle_minutes * 60)
+            if done_after:
+                st.orphans.append((d, started, z.stat().st_size))
+                continue
+            # gpt가 아예 없으면 --stale-minutes, 돌고 있어도 **하드 상한**을
+            # 넘기면 남은 폴더로 본다. 씬 하나가 아무리 오래 걸려도 실측 최장이
+            # 107분이라(WORKLOG 2026-08-18), 이 상한을 넘겼다면 다른 씬을 굽는
+            # gpt를 보고 "처리중"이라 오해하고 있는 것이다.
+            age = now - started
+            stale = ((st.gpt_procs == 0 and age > stale_minutes * 60)
+                     or age > stale_hours * 3600)
             st.busy[key] = (z.name, started, stale)
             st.outs.pop(key, None)      # 쓰는 중인 tif는 완료가 아니다
     return st
@@ -568,6 +600,9 @@ def render_text(rows: list[dict], st: LocalState, fetched: str, args) -> str:
         f" · 완료 {len(st.outs)}" + (f" · 제외 {len(excluded)}" if excluded else "")
         + (f" · 중단? {len(stalled)}" if stalled else "")
         + (f"   [gpt {st.gpt_procs}개 실행 중]" if st.gpt_procs > 0 else ""))
+    for d, started, size in sorted(st.orphans, key=lambda o: o[1]):
+        add(f"  ⚠ 잔여 임시폴더  {d.name}  {gb(size)}  ({ago(started)} 생성) "
+            f"— 끝난 씬의 찌꺼기다. 지워도 된다")
     for key in sorted(st.busy, key=lambda k: st.busy[k][1]):
         name, started, stale = st.busy[key]
         out_tif = args.out_dir / (Path(name).stem + args.out_suffix + ".tif")
@@ -773,7 +808,7 @@ class Dashboard:
         while True:
             try:
                 st = scan_local(self.args.out_dir, self.args.out_suffix,
-                                self.args.stale_minutes)
+                                self.args.stale_minutes, self.args.stale_hours)
                 # 대기로 남은 zip 의 한반도 겹침%를 재 둔다(캐시). 이게 있어야
                 # "밀린 것"과 "애초에 대상이 아닌 것"이 갈린다.
                 scan_footprints(st, self.args.min_overlap)
@@ -868,7 +903,9 @@ class Dashboard:
                   + f"    |    대기 {len(pending)} · 처리중 {len(busy)}"
                   + (f" · 중단? {len(stalled)}" if stalled else "")
                   + f" · 완료 {len(st.outs)}"
-                  + (f" · 제외 {n_skip}" if n_skip else "")))
+                  + (f" · 제외 {n_skip}" if n_skip else "")
+                  + (f"   ⚠ 잔여 임시폴더 {len(st.orphans)}개 "
+                     f"{gb(sum(o[2] for o in st.orphans))}" if st.orphans else "")))
 
         # 촬영 — 예정 · 최근을 한 표에 --------------------------------------
         scene_rows = [{
@@ -991,6 +1028,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="산출물 파일 접미사. 기본 _rtc_db_vh")
     ap.add_argument("--stale-minutes", type=int, default=30,
                     help="gpt가 없는데 이 시간을 넘긴 임시폴더는 '중단?'으로 표시")
+    ap.add_argument("--stale-hours", type=float, default=6.0,
+                    help="gpt가 돌고 있어도 이 시간을 넘긴 임시폴더는 '중단?'. "
+                         "씬 하나 실측 최장이 107분이라 그보다 넉넉히 잡았다")
     ap.add_argument("--local-seconds", type=int, default=20,
                     help="로컬 파일 스캔 주기(초). 기본 20")
     ap.add_argument("--cdse-minutes", type=int, default=15,
@@ -1021,7 +1061,8 @@ def main() -> int:
             sys.stdout.reconfigure(encoding="utf-8")         # 콘솔 한글 깨짐 방지
         except Exception:                                    # noqa: BLE001
             pass
-        st = scan_local(args.out_dir, args.out_suffix, args.stale_minutes)
+        st = scan_local(args.out_dir, args.out_suffix, args.stale_minutes,
+                        args.stale_hours)
         scan_footprints(st, args.min_overlap)
         try:
             rows = fetch_cdse(args.days, args.collection, args.min_overlap, args.step)
