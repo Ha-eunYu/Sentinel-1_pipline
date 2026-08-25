@@ -21,13 +21,18 @@
 
 판정
 ----
-| 지표 | 정상(2026-08 실측 30장) | 불량(`D635` 껍데기) |
+| 지표 | 정상 | 불량(`D635` 껍데기) |
 | --- | --- | --- |
-| 유효화소 | 60 ~ 100% | 0.0% |
+| 유효화소 | 42 ~ 100% | 0.0% |
 | 압축률 (float32 기준) | 25 ~ 44% | 2.6% |
 
 간격이 10배 이상이라 **"한 자릿수면 불량"** 이 식에 가장 덜 민감하다. 판정은
 압축률 단독으로 하지 않고 **유효화소를 같이** 본다.
+
+⚠ **유효화소가 낮다고 손상은 아니다.** 스와스가 기울어져 있어 북쪽 정렬 사각형의
+네 모서리는 구조적으로 무효다. 2026-08 남한 위주 표본은 60~100%였지만 2026-07
+북부 프레임 12장은 **42.9~66.8%** 이고 전부 정상이다. 그래서 이 도구는 40% 미만
+에서만 ⚠ 를 달고, 지우는 선은 그보다 훨씬 낮은 5%다.
 
 실행
 ----
@@ -54,7 +59,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from s1.core.paths import RTC_FROST_VH_DIR, rel
-from s1.core.rtc_qc import NORMAL_COMPRESS, NORMAL_VALID, VALID_FLOOR, RtcStats, measure
+from s1.core.rtc_qc import LOW_VALID, NORMAL_COMPRESS, VALID_FLOOR, RtcStats, measure
 from s1.core.scene import scene_date, scene_id
 
 
@@ -142,8 +147,10 @@ def main() -> None:
         printed += 1
         if not args.ids:
             note = "OK" if ok else f"❌ 하한 {args.min_valid:.0f}% 미달"
-            if ok and not (NORMAL_VALID[0] <= st.valid_frac):
-                note = "⚠ 정상범위(60~100%) 아래 — DEM 밖인지 볼 것"
+            if ok and st.valid_frac < LOW_VALID:
+                # 기울어진 스와스는 기하만으로 40%대가 나온다(rtc_qc 주석).
+                # 그보다 낮으면 그것만으로는 설명이 안 되니 따로 보라는 뜻이다.
+                note = f"⚠ 낮음 — 스와스 기하인지 DEM 밖인지 확인 (기하 정상은 {LOW_VALID*100:.0f}%대까지)"
             elif ok and not (NORMAL_COMPRESS[0] <= st.compress_ratio <= NORMAL_COMPRESS[1]):
                 note = "⚠ 압축률이 정상범위(25~44%) 밖"
             print(f"{tag:<6}{date:<10}{st.valid_frac * 100:>7.2f}"
