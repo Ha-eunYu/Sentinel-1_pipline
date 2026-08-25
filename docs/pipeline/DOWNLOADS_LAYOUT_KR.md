@@ -40,10 +40,10 @@ E: 812 GB(GRD 원본) · F: 243 GB(작업·산출물) · X:/Y: NAS
 
 | 폴더 | 용량 | 내용 | 비고 |
 | --- | ---: | --- | --- |
-| `gtc/` | 82 GB | GTC(Sigma0, TF 없음) | [RTC_VS_GTC_KR.md](RTC_VS_GTC_KR.md)의 근거 |
-| `water/` | 47 GB | 고정 임계값(−16 dB) 수체 마스크 97개 | Otsu 도입 전 방식 |
+| ~~`gtc/`~~ | — | **2026-08-25 삭제**(아래 삭제 이력) | [RTC_VS_GTC_KR.md](RTC_VS_GTC_KR.md)에 결론 |
+| ~~`water/`~~ | — | **2026-08-25 삭제** | 수치는 [WATER_AREA_KR.md](../water/WATER_AREA_KR.md) |
 | `etc/` | 15 GB | RTC dB 16개 (한반도 0%·중복 등 분류 보류분) | |
-| `excluded_china_japan/` | 9.0 GB | 한반도 footprint 0% 씬 | 감사용 |
+| ~~`excluded_china_japan/`~~ | — | **2026-08-25 삭제** — 원본 zip 3개는 `E:\06_SAR_system_archive\excluded_china_japan\`로 이동 | 감사용 |
 | `rtc_extdem/` | 4.8 GB | 유역 clip DEM RTC 패치본 | 범위가 좁다(ISSUES #13) |
 | `rtc_dem_test/` | 4.6 GB | COP30 vs NGII DEM 비교 실험 4개 | |
 | `ls_mask30/` | 2.8 GB | 레이오버·섀도 마스크 | [LS_MASK_KR.md](LS_MASK_KR.md) |
@@ -59,6 +59,32 @@ E: 812 GB(GRD 원본) · F: 243 GB(작업·산출물) · X:/Y: NAS
 | `_archive/rtc_grd_vv_meta/` | 삭제된 VV RTC(`rtc_grd/`)의 **메타데이터만** — 모자이크 VRT 정의 17개, footprint 감사 결과(geojson·csv), tree.txt. 어떤 조합의 모자이크를 만들었는지 기록으로 남긴다. **VRT는 참조 tif가 없어 열리지 않는다.** |
 
 ## 삭제 이력
+
+**2026-08-25**: 대조군·구방식 산출물 삭제 (**136 GB 확보**, F: 여유 112 → 248 GB)
+
+전처리 대기 57건에 약 131 GB가 필요한데 F: 여유가 112 GB뿐이라 **끝나기 전에
+공간이 떨어지는 상황**이었다. 세 폴더 모두 결론이 이미 문서에 반영됐고 원본
+zip(E:)으로 재생성 가능해 지웠다.
+
+| 폴더 | 삭제 | 내용 | 근거 문서 |
+| --- | ---: | --- | --- |
+| `gtc/` | 56 tif, 79.3 GB | GTC(Sigma0, TF 없음) 대조군 | [RTC_VS_GTC_KR.md](RTC_VS_GTC_KR.md) |
+| `water/` | 123 tif, 46.9 GB | 고정 임계값(−16 dB) 수체 마스크 | [WATER_AREA_KR.md](../water/WATER_AREA_KR.md) · Otsu 도입 전 방식 |
+| `excluded_china_japan/` | 16 tif, 10.1 GB | 한반도 0% 프레임의 RTC | [SCENE_FOOTPRINT_REAUDIT_KR.md](SCENE_FOOTPRINT_REAUDIT_KR.md) · [FOREIGN_FRAME_COST_KR.md](FOREIGN_FRAME_COST_KR.md) |
+
+**지우기 전에 옮긴 것** — 삭제 대상 안에 재생성 불가·소량 자료가 섞여 있었다.
+
+- `excluded_china_japan/`의 **원본 zip 3개**(`B5F3`·`8B48`·`B2F4`, 2.0 GB)는
+  E:에 사본이 없는 **유일본**이었다 →
+  `E:\06_SAR_system_archive\excluded_china_japan\`로 이동. 타국 프레임 비용
+  집계의 증거물이라 남긴다(다시 받으려면 CDSE 재다운로드).
+- `water/flood_hotspots_{strict,relaxed}.geojson`(4.7 MB) →
+  `downloads/_archive/water_meta/`로 백업.
+
+**폴더 상수는 그대로 둔다.** `s1.core.paths`의 `GTC_DIR`·`WATER_DIR`·
+`EXCLUDED_DIR`는 정의만 남아 있고, 해당 배치를 다시 돌리면 폴더가 새로 생긴다
+(`batch_grd_gtc`, `build_water_per_date`, `flood_hotspots` 등). 지금 그 도구들을
+돌리면 **빈 폴더에서 시작**한다는 것만 알고 있으면 된다.
 
 **2026-08-17**: VH external DEM 통일 완료 후 VV RTC 삭제 (176 GB 확보)
 
