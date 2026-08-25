@@ -26,6 +26,7 @@ import argparse
 from pathlib import Path
 
 from s1.core.paths import GRD_DIR, RTC_FROST_DIR, rel
+from s1.core.rtc_qc import VALID_FLOOR
 from s1.core.scene import matches_scene_id, scene_date
 from s1.preprocess.batch_runner import run_batch
 from s1.preprocess.prepro_grd_gpt import build_grd_rtc_graph
@@ -72,6 +73,13 @@ def main() -> None:
                          "granule 가장자리가 DEM 밖이라 무효로 남는 건 정상이다.")
     ap.add_argument("--dem-nodata", type=float, default=-32768.0,
                     help="External DEM의 nodata (기본 -32768, COP30 관례)")
+    # 유효화소 하한 (2026-08-25 추가, ISSUES #24)
+    # 프레임이 DEM 밖이면 SNAP 은 **오류 없이** 빈 산출물을 낸다. 파일이 남으면
+    # 다음 실행이 '이미 처리됨'으로 건너뛰어 DEM 을 넓혀도 안 고쳐진다.
+    ap.add_argument("--min-valid", type=float, default=VALID_FLOOR * 100,
+                    help=f"산출물 유효화소 하한(%%). 미달이면 실패로 세고 파일을 "
+                         f"**지운다**. 기본 {VALID_FLOOR * 100:.0f}%% "
+                         f"(정상 60~100%%, 빈 껍데기 0%%). 0 이면 검사 끔")
     ap.add_argument("--dem-egm", action="store_true",
                     help="External DEM에 EGM 지오이드 보정을 적용한다. **COP30에는 "
                          "주지 말 것** — COP30은 이미 타원체고라 이중 적용되면 "
@@ -102,6 +110,8 @@ def main() -> None:
     print(f"대상 GRD({args.month}, {order}): {len(zips)}개 -> {rel(out_dir)} "
           f"(Frost, {args.pol})")
     print(f"DEM: {dem_desc}")
+    print(f"유효화소 하한: {args.min_valid:.0f}%"
+          + ("  ⚠ 검사 꺼짐 — 빈 산출물이 성공으로 집계된다" if args.min_valid <= 0 else ""))
     for z in zips:
         print(f"  {scene_date(z)}  {z.name}")
 
@@ -118,7 +128,8 @@ def main() -> None:
               suffix=f"_rtc_db{args.out_tag}",
               gpt_options=["-q", args.gpt_q, "-c", args.gpt_c],
               tmp_prefix="frostrtc_",
-              label="배치")
+              label="배치",
+              min_valid_frac=args.min_valid / 100)
 
 
 if __name__ == "__main__":
