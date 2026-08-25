@@ -673,6 +673,9 @@ VH RTC 105개 전수에서 **유효화소 20% 미만이 14개**다. 14개 **전�
       큰 것만**. 씬당 80~100분.
       ⚠ **8월분은 그 뒤 peninsula DEM 으로 다시 구워졌을 수 있다.** #17 목록을
       그대로 쓰지 말고 `rtc_integrity` 로 **지금 상태를 재고** 정할 것.
+- [x] ✅ **원본 zip 14/14 전부 로컬에 있다** (2026-08-25 확인, 0.85~1.19 GB).
+      다운로드 선행 없이 바로 재처리할 수 있다. (`downloads/sentinel1_grd/`,
+      E: 이관분 정션 포함 180개)
 - [ ] 재처리 명령: `--dem downloads/dem_basin/korea_peninsula_cop30.tif`
       ⚠ 파일명이 같아 **덮어쓰기**다. 먼저 지워야 배치가 건너뛰지 않는다.
       (대상 목록은 `rtc_integrity --min-valid 20 --only-bad --ids` 가 배치의
