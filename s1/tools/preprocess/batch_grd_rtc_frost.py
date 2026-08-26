@@ -27,6 +27,7 @@ from pathlib import Path
 
 from s1.core.paths import GRD_DIR, RTC_FROST_DIR, rel
 from s1.core.rtc_qc import VALID_FLOOR
+from s1.core.region_filter import filter_peninsula
 from s1.core.scene import matches_scene_id, scene_date
 from s1.preprocess.batch_runner import run_batch
 from s1.preprocess.prepro_grd_gpt import build_grd_rtc_graph
@@ -44,6 +45,16 @@ def main() -> None:
         help="쉼표로 구분한 씬 ID(4자리) 목록만 처리 (예: 08EE,9B8B). "
         "남한 footprint 씬만 골라 돌릴 때 사용.",
     )
+    # 지역 판정 (2026-08-26 추가) — 처리 직전 마지막 방어선.
+    # 앞단(모니터링·다운로드)에 판정이 있어도 zip 은 그 단계를 거치지 않고 들어온다
+    # (NAS rsync 재유입, 판정 없는 다운로더, 수동 복사). 754B 가 그렇게 재유입돼
+    # 1.25 GB 헛산출물이 됐다(FOREIGN_FRAME_COST_KR.md ②).
+    ap.add_argument("--no-region-check", action="store_true",
+                    help="한반도 footprint 판정을 끈다. 타국 프레임도 그대로 처리하므로 "
+                         "판정이 의심될 때만 쓸 것")
+    ap.add_argument("--min-overlap", type=float, default=1.0,
+                    help="한반도 교집합이 이 비율(%%) 미만이면 제외 (기본 1.0). "
+                         "STAC 메타로 먼저 거르고 확정 못 한 것만 KML 실측한다")
     # gpt 자원 옵션: 실측상 gpt는 -q 8 을 줘도 1코어 남짓만 쓰고(단일 스레드 구간이
     # 병목) 디스크도 유휴라, 배치 2개를 병렬로 띄우는 편이 총 처리시간을 줄인다.
     # 그때 타일 캐시(-c)를 나눠 잡아야 RAM(32GB)을 넘기지 않는다.
@@ -101,6 +112,16 @@ def main() -> None:
         zips = [z for z in zips if matches_scene_id(z, wanted)]
     if not zips:
         raise FileNotFoundError(f"{rel(GRD_DIR)} 에 {args.month} 촬영 GRD zip이 없습니다.")
+
+    # 처리 **직전** 마지막 방어선. 앞단(모니터링·다운로드) 판정을 거치지 않고
+    # 들어온 zip(NAS rsync 재유입, 판정 없는 다운로더, 수동 복사)을 여기서 막는다.
+    # 이 방어선이 없어 754B 가 재유입 뒤 1.25 GB 헛산출물이 됐다.
+    if not args.no_region_check:
+        zips, _ = filter_peninsula(zips, min_pct=args.min_overlap)
+        if not zips:
+            raise SystemExit("한반도를 찍은 씬이 없습니다. "
+                             "--no-region-check 로 판정을 끌 수 있습니다.")
+
     # 최신 날짜 먼저 (동일 날짜는 파일명 역순)
     zips.sort(key=lambda z: (scene_date(z) or "", z.name), reverse=not args.oldest_first)
 
