@@ -239,5 +239,5 @@ python gee/Korea_WaterDetection_2025_2026/ls_mask_impact.py --lakes
 
 - [gee/ASF_HyP3/RTC_VS_OPERA_QUANT_KR.md](../../../gee/ASF_HyP3/RTC_VS_OPERA_QUANT_KR.md) — γ⁰ 정량 평가
 - [gee/ASF_HyP3/SLOPE_STRATIFICATION_KR.md](../../../gee/ASF_HyP3/SLOPE_STRATIFICATION_KR.md) — 경사 층화
-- `gee/PITFALLS_KR.md` — 조용히 틀리는 함정 ⚠ **아직 없는 문서다**(2026-08-26 확인).
+- [gee/docs/PITFALLS_KR.md](../../../gee/docs/PITFALLS_KR.md) — 조용히 틀리는 함정
   링크로 두면 깨진 링크가 되므로 이름만 남긴다.
