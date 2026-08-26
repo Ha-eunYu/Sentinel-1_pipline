@@ -96,3 +96,8 @@ experiments/*
 # 커밋된다(GitHub 파일당 100 MB 한도에 걸려 push 도 막힌다). 소스가 저장소에
 # 없으므로 산출물만 두는 폴더다 — CSV 3개는 입력 자료라 추적한다.
 SentinelObservationPlan/*.exe
+
+# ESA 촬영계획 뷰어 배포본(275 MB exe). 내려받아 쓰는 외부 도구다.
+# 같이 들어 있던 댐 좌표 3종(다목적댐·다목적보·용수댐, 51지점)은
+# data/dam_points_kwater.csv 로 합쳐 두었으므로 여기를 통째로 뺀다.
+SentinelObservationPlan/
