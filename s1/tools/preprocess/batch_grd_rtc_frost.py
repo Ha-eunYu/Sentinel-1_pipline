@@ -90,7 +90,8 @@ def main() -> None:
     ap.add_argument("--min-valid", type=float, default=VALID_FLOOR * 100,
                     help=f"산출물 유효화소 하한(%%). 미달이면 실패로 세고 파일을 "
                          f"**지운다**. 기본 {VALID_FLOOR * 100:.0f}%% "
-                         f"(정상 60~100%%, 빈 껍데기 0%%). 0 이면 검사 끔")
+                         f"(정상 42~100%%, 빈 껍데기 0%%). 0 이면 검사 끔. "
+                         f"⚠ 기울어진 스와스는 기하만으로 40%%대가 정상이다")
     ap.add_argument("--dem-egm", action="store_true",
                     help="External DEM에 EGM 지오이드 보정을 적용한다. **COP30에는 "
                          "주지 말 것** — COP30은 이미 타원체고라 이중 적용되면 "

@@ -15,9 +15,9 @@ Java-Python 다리(bridge)가 필요합니다. 이름과 구조는 SNAP 버전�
 
 | SNAP 버전 | 패키지 이름 | 설명 | 참고 문서 |
 | --- | --- | --- | --- |
-| ≤ 9 | `snappy` | snap-engine 내부 모듈. Python 2.7~3.6만 지원 | [Configure Python … (snappy) interface (SNAP versions <= 9).md](<esa-snappy-master/Configure Python to use the SNAP-Python (snappy) interface (SNAP versions -= 9).md>) |
-| 10~11 | `esa_snappy` | 독립 SNAP 플러그인으로 분리 (이 저장소가 그 소스). SNAP 11에서는 Plugin Manager로 수동 설치 필요 | [Configure Python … (esa_snappy) interface (SNAP version 10+).md](<esa-snappy-master/Configure Python to use the SNAP-Python (esa_snappy) interface (SNAP version 10+).md>) |
-| 12+ | `esa_snappy` (+ SNAPISTA 통합) | PyPI(`pip install esa-snappy`)로 배포, Python 3.9~3.13 지원. Terradue의 SNAPISTA가 패키지 안에 통합됨 | [Installation and configuration … (SNAP version 12+).md](<esa-snappy-master/Installation and configuration of the SNAP-Python (esa_snappy) interface (SNAP version 12+).md>) |
+| ≤ 9 | `snappy` | snap-engine 내부 모듈. Python 2.7~3.6만 지원 | [Configure Python … (snappy) interface (SNAP versions <= 9).md](<../../esa-snappy-master/Configure Python to use the SNAP-Python (snappy) interface (SNAP versions -= 9).md>) |
+| 10~11 | `esa_snappy` | 독립 SNAP 플러그인으로 분리 (이 저장소가 그 소스). SNAP 11에서는 Plugin Manager로 수동 설치 필요 | [Configure Python … (esa_snappy) interface (SNAP version 10+).md](<../../esa-snappy-master/Configure Python to use the SNAP-Python (esa_snappy) interface (SNAP version 10+).md>) |
+| 12+ | `esa_snappy` (+ SNAPISTA 통합) | PyPI(`pip install esa-snappy`)로 배포, Python 3.9~3.13 지원. Terradue의 SNAPISTA가 패키지 안에 통합됨 | [Installation and configuration … (SNAP version 12+).md](<../../esa-snappy-master/Installation and configuration of the SNAP-Python (esa_snappy) interface (SNAP version 12+).md>) |
 
 이 프로젝트는 **SNAP 12+ 방식**(PyPI `esa-snappy` 1.1.2 + `snappy-conf` 연동)을 사용합니다.
 설치 절차는 [environment_snappy.yml](../../env/environment_snappy.yml) 상단 주석 참고.
@@ -26,7 +26,7 @@ Java-Python 다리(bridge)가 필요합니다. 이름과 구조는 SNAP 버전�
 
 ## 2. 아키텍처: 3개의 구성 요소
 
-[SNAP 12+ 설치 문서](<esa-snappy-master/Installation and configuration of the SNAP-Python (esa_snappy) interface (SNAP version 12+).md>)에
+[SNAP 12+ 설치 문서](<../../esa-snappy-master/Installation and configuration of the SNAP-Python (esa_snappy) interface (SNAP version 12+).md>)에
 따르면 esa_snappy 인터페이스는 세 부분으로 이루어져 있습니다:
 
 1. **SNAP 쪽 Java 모듈** — SNAP-Python 연동 설정을 담당하는 SNAP 플러그인.
@@ -116,7 +116,7 @@ g.run()                                       # 그래프를 임시 XML로 저�
 
 ## 4. 설치와 설정 (SNAP 12+ 기준)
 
-출처: [Installation and configuration … (SNAP version 12+).md](<esa-snappy-master/Installation and configuration of the SNAP-Python (esa_snappy) interface (SNAP version 12+).md>)
+출처: [Installation and configuration … (SNAP version 12+).md](<../../esa-snappy-master/Installation and configuration of the SNAP-Python (esa_snappy) interface (SNAP version 12+).md>)
 
 1. Python 3.9~3.13 준비 (Anaconda/Miniconda **권장**, python.org도 가능, 시스템 파이썬은 비권장)
 2. `pip install esa-snappy` — PyPI에서 파이썬 패키지 설치
@@ -172,9 +172,9 @@ g.run()                                       # 그래프를 임시 XML로 저�
 | 파일 | 내용 |
 | --- | --- |
 | [README.md](../../esa-snappy-master/README.md) | 저장소 소개. esa_snappy의 목적(SNAP Java API 사용 + Python 연산자 플러그인 개발)과 공식 위키 링크 모음 |
-| [Installation and configuration … (SNAP version 12+).md](<esa-snappy-master/Installation and configuration of the SNAP-Python (esa_snappy) interface (SNAP version 12+).md>) | **현재 기준 문서.** SNAP 12+ 설치/설정/테스트/트러블슈팅. SNAPISTA 통합 설명 포함 |
-| [Configure Python … (esa_snappy) interface (SNAP version 10+).md](<esa-snappy-master/Configure Python to use the SNAP-Python (esa_snappy) interface (SNAP version 10+).md>) | SNAP 10~11용 설정 문서. SNAP 11에서 Plugin Manager로 수동 설치해야 했던 제약 설명 |
-| [Configure Python … (snappy) interface (SNAP versions <= 9).md](<esa-snappy-master/Configure Python to use the SNAP-Python (snappy) interface (SNAP versions -= 9).md>) | 구버전(≤9) `snappy` 설정 문서 (역사 참고용) |
+| [Installation and configuration … (SNAP version 12+).md](<../../esa-snappy-master/Installation and configuration of the SNAP-Python (esa_snappy) interface (SNAP version 12+).md>) | **현재 기준 문서.** SNAP 12+ 설치/설정/테스트/트러블슈팅. SNAPISTA 통합 설명 포함 |
+| [Configure Python … (esa_snappy) interface (SNAP version 10+).md](<../../esa-snappy-master/Configure Python to use the SNAP-Python (esa_snappy) interface (SNAP version 10+).md>) | SNAP 10~11용 설정 문서. SNAP 11에서 Plugin Manager로 수동 설치해야 했던 제약 설명 |
+| [Configure Python … (snappy) interface (SNAP versions <= 9).md](<../../esa-snappy-master/Configure Python to use the SNAP-Python (snappy) interface (SNAP versions -= 9).md>) | 구버전(≤9) `snappy` 설정 문서 (역사 참고용) |
 | [How to use the SNAP API from Python.md](<../../esa-snappy-master/How to use the SNAP API from Python.md>) | **API 사용법 본문.** 읽기/쓰기, GPF 연산자 호출, numpy 커스텀 연산, jpy 클래스 import 목록 |
 | [PY01_Sentinel1Processing_snappy.pdf](../../esa-snappy-master/PY01_Sentinel1Processing_snappy.pdf) | 튜토리얼 PDF **"SENTINEL-1 PROCESSING USING SNAPPY"** (PDF 본문에서 제목 확인) — 이 프로젝트(S1 SLC 전처리)와 가장 직접 관련된 실습 자료 |
 | [preprints201911.0393.v1.pdf](../../esa-snappy-master/preprints201911.0393.v1.pdf) | 학술 프리프린트 (Mandal, Vaka, Bhogapurapu, Vanama, Kumar, Rao, Bhattacharya — IIT Bombay Microwave Remote Sensing Lab, 2019). SNAP에서의 **Sentinel-1 SLC 전처리 워크플로**를 다루는 논문으로, snappy 기반 S1 처리의 배경 문헌 |

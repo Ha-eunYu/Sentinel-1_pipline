@@ -123,7 +123,9 @@ S1C_..._93FC_COG_rtc_db.tif (37102x21261)
 
 ### 하류 오판의 코드상 출처
 
-[downloads/rtc_grd/get_tif_shooting_area.py:122-139](../../downloads/rtc_grd/get_tif_shooting_area.py#L122-L139)
+[s1/tools/audit/tif_extent_report.py](../../s1/tools/audit/tif_extent_report.py)
+(옛 경로 `downloads/rtc_grd/get_tif_shooting_area.py:122-139` — 2026-08-17 데이터
+폴더 정리 때 옮겼다, TODO P0.1b)
 의 `raster_corner_polygon()`이 래스터 네 모서리를 지리좌표로 변환해 footprint를
 만들고, 이걸 행정경계와 중첩해 "촬영 지역"을 산출합니다. docstring은 "회전된
 GeoTIFF도 처리할 수 있도록 단순 bounds가 아니라" 라고 적혀 있지만, **RTC 입력에는
@@ -221,7 +223,7 @@ strict         = relaxed & (diff <= args.drop)                # + 하락폭 -3 d
   HAND(`dB < 임계 AND HAND < 10 m`)를 쓰고, `water_frequency_grd.tif`
   (관측일수 중 물로 잡힌 횟수)로 상시수체 후보를 뽑을 수 있습니다.
 - **GEE 경로에는 이미 구현돼 있습니다** —
-  [gee/geeflood/sar.py:88-91](gee/geeflood/sar.py#L88-L91):
+  [gee/geeflood/sar.py:88-91](../../../gee/geeflood/sar.py#L88-L91):
   `JRC/GSW1_4/GlobalSurfaceWater` seasonality ≥ 10 을 상시수체로 제거하고,
   Otsu 자동 임계 + `connectedPixelCount(25).gte(min_connected)` MMU까지
   한 번에 적용합니다. 로컬 파이프라인에 이식할 기성 참조 구현이 사내에 있는

@@ -351,5 +351,5 @@ print(compare_bbox_vs_footprint(item.bbox, item.geometry))
   이미 처리돼 있을 수 있습니다. "확인할 것" 체크리스트를 먼저 돌려보고,
   해당 없는 항목은 지워 주세요.
 - **관련 문서**: [README.md](../../sarsen-0.9.6/README.md) 3절(footprint 원칙)·5절(침수 분석
-  워크플로), [TODO.md](TODO.md) "침수 분석 워크플로 개선",
+  워크플로), [TODO_KR.md](../worklog/TODO_KR.md) "침수 분석 워크플로 개선",
   [footprint/FOOTPRINT_AOI_KR.md](../pipeline/FOOTPRINT_AOI_KR.md)

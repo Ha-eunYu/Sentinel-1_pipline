@@ -22,6 +22,23 @@
 > VH external DEM 통일), 할 일은 [TODO_KR.md](TODO_KR.md) P0.1~P0.3,
 > 문제 목록은 [ISSUES_KR.md](ISSUES_KR.md)를 보십시오.
 
+> ### 📍 이 문서의 본문은 **2026-07-22 에서 멈춰 있다** (2026-08-26 확인)
+>
+> 7/27 이후의 작업은 여기 이어 적지 않고 **날짜별 WORKLOG 파일**로 갈라졌다.
+> 아래 "작업 이력"과 "한눈에 보기" 표는 **7월 홍수 국면의 기록**이고, 지금
+> 상태를 알려면 이 문서가 아니라 다음을 봐야 한다.
+>
+> | 알고 싶은 것 | 볼 곳 |
+> | --- | --- |
+> | **지금 뭐가 열려 있나** | [TODO_KR.md](TODO_KR.md) 「지금 열려 있는 것」 |
+> | 전처리 규격 (정본) | [PREPROCESSING_SPEC_KR.md](../pipeline/PREPROCESSING_SPEC_KR.md) |
+> | 최근 작업 경위 | [WORKLOG_20260825_26_KR.md](WORKLOG_20260825_26_KR.md) → [20260818](WORKLOG_20260818_KR.md) → [20260814](WORKLOG_20260814_KR.md) |
+> | 데이터 폴더 현황 | [DOWNLOADS_LAYOUT_KR.md](../pipeline/DOWNLOADS_LAYOUT_KR.md) |
+> | 반복해서 밟은 문제 | [ISSUES_KR.md](ISSUES_KR.md) |
+>
+> **본문을 지우지 않는 이유**는 7월 홍수 산출물의 근거가 여기 있기 때문이다.
+> 다만 **"한눈에 보기" 표를 현재 상태로 읽지 말 것** — 편파도 DEM도 다르다.
+
 ## 한눈에 보기
 
 | 단계 | 상태 |
