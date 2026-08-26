@@ -77,6 +77,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -98,6 +99,8 @@ from s1.tools.monitor.monitor_new_scenes import (KOREA_BBOX, Boundary,  # noqa: 
 KST = timezone(timedelta(hours=9))
 CACHE_PATH = DOWNLOADS_DIR / "dashboard_cache.json"
 FOOTPRINT_CACHE = DOWNLOADS_DIR / "footprint_cache.json"
+# pythonw 는 stderr 를 버린다. 창이 굳는 종류의 버그는 이 로그로만 잡힌다.
+LOG_PATH = PROJECT_DIR / "temp" / "logs" / "scene_dashboard.log"
 
 # 배치 러너가 쓰는 임시폴더 접두사(s1/preprocess/batch_runner.py 호출부들).
 TMP_PREFIXES = ("frostrtc_", "rtc_", "gtc_", "slcrtc_", "snapbatch_")
@@ -851,6 +854,13 @@ class Dashboard:
     # --- 그리기 --------------------------------------------------------------
 
     def tick(self) -> None:
+        """큐를 비우고 다시 그린다. **무슨 일이 있어도 다음 tick을 예약한다.**
+
+        예전에는 `draw()`에서 예외가 나면 마지막 줄의 `after()`가 실행되지 않아
+        **갱신이 영구히 멈췄다.** pythonw는 stderr를 버리므로 흔적도 없이 화면만
+        굳는다 — 2026-08-26에 세 시간 넘게 그 상태였고, 제목줄(예외 직전에 쓴
+        값)과 요약줄(그 전 값)이 어긋나 있는 것으로만 알 수 있었다.
+        """
         try:
             while True:
                 kind, payload = self.q.get_nowait()
@@ -867,7 +877,28 @@ class Dashboard:
                 self.draw()
         except queue.Empty:
             pass
-        self.root.after(1000, self.tick)
+        except Exception as e:                               # noqa: BLE001
+            self.log_error("그리기 실패", e)
+        finally:
+            self.root.after(1000, self.tick)
+
+    def log_error(self, what: str, exc: BaseException) -> None:
+        """예외를 파일에 남기고 상태줄에 한 줄로 알린다.
+
+        pythonw로 띄우면 stderr가 사라져 traceback을 볼 방법이 없다. 창이 굳는
+        종류의 버그는 이 로그가 없으면 재현부터 해야 한다.
+        """
+        try:
+            LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(f"\n[{datetime.now(KST):%Y-%m-%d %H:%M:%S}] {what}\n")
+                traceback.print_exc(file=f)
+        except Exception:                                    # noqa: BLE001
+            pass
+        try:
+            self.status.config(text=f"⚠ {what}: {exc}  (자세한 내용은 {rel(LOG_PATH)})")
+        except Exception:                                    # noqa: BLE001
+            pass
 
     TAGS = {"예정": "plan", "미수신": "new", "받는중": "run", "전처리중": "run",
             "완료": "done", "중단?": "hot", "제외": "none"}
@@ -888,10 +919,15 @@ class Dashboard:
 
         scanned = (datetime.fromtimestamp(st.scanned, KST).strftime("%H:%M:%S")
                    if st.scanned else "-")
+        # 스캔이 멈추면 **멈췄다고 말한다.** 시각만 낡은 채로 두면 "잠깐 늦나
+        # 보다"와 "몇 시간째 죽어 있다"가 똑같이 보인다(2026-08-26).
+        behind = time.time() - st.scanned if st.scanned else 0.0
+        stalled_scan = (f"  ⚠ {int(behind // 60)}분째 멈춤"
+                        if behind > max(180, self.args.local_seconds * 3) else "")
         self.status.config(
             text=(f"CDSE {self.fetched}" + ("  조회 중…" if self.busy_cdse else "")
                   + f"   ·   계획 {self.plan_fetched}"
-                  + f"   ·   폴더 스캔 {scanned}"))
+                  + f"   ·   폴더 스캔 {scanned}{stalled_scan}"))
         self.btn_refresh.state(["disabled"] if self.busy_cdse else ["!disabled"])
         # 작업표시줄에 창을 최소화해 둬도 요점은 보이게 한다.
         self.root.title(f"S1 현황 · 처리중 {len(busy)} · 대기 {len(pending)}"
@@ -936,7 +972,12 @@ class Dashboard:
         for key in sorted(st.busy, key=lambda k: st.busy[k][1]):
             name, started, stale = st.busy[key]
             out_tif = self.args.out_dir / (Path(name).stem + self.args.out_suffix + ".tif")
-            written = gb(out_tif.stat().st_size) if out_tif.exists() else "-"
+            try:
+                # 배치가 지금 쓰고 있는 파일이라 exists() 와 stat() 사이에
+                # 사라질 수 있다. 그 한 줄 때문에 화면 전체가 멈추면 안 된다.
+                written = gb(out_tif.stat().st_size) if out_tif.exists() else "-"
+            except OSError:
+                written = "-"
             proc_rows.append(self._proc_row(
                 "중단?" if stale else "처리중", name, "hot" if stale else "run",
                 f"{ago(started)} 시작 · {written} 기록"))
