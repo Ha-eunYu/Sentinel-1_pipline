@@ -503,7 +503,7 @@ CDSE 관측 목록(`data/relative_orbits_sentinel-1-grd.csv`, 22~26년 7·8월 �
 > #41**(라벨과 판정을 한 문자열에 담아 사전 조회가 빗나간 사고)**이 재발한다.**
 > 보고서에는 두 값을 나란히 적는다.
 >
-> 경계선 자체의 이력·미해결 건: [gee BORDER_BOUNDARY_KR.md](../../../gee/Korea_WaterDetection_2025_2026/BORDER_BOUNDARY_KR.md)
+> 경계선 자체의 이력·미해결 건: [gee BORDER_BOUNDARY_KR.md](../../../gee/Korea_WaterDetection_2025_2026/docs/BORDER_BOUNDARY_KR.md)
 - [ ] 🔴 **한강 +4.0% 은 9개 대상 중 유일한 증가다 — 인용 전 확인할 것**
 
 > ### 한강 증가가 임계값 인공물인지 실측으로 갈랐다 (2026-08-26)
