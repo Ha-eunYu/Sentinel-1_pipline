@@ -123,11 +123,35 @@ def group_scenes(dates: list[str] | None, source_dir: Path, suffix: str
     return groups
 
 
+# 원본 RTC 의 화소 크기(도). 전 프레임이 같은 값이다.
+# `-tap` 이 이 값의 정수배 격자에 모자이크를 스냅시킨다.
+PIXEL_DEG = 0.000089831528411952148
+
+
 def build_group_vrt(date: str, orbit: str, frames: list[Path], vrt_dir: Path) -> Path:
-    """궤도별 모자이크 VRT 생성. 소스를 절대경로로 넣어 VRT 위치와 무관하게 열림."""
+    """궤도별 모자이크 VRT 생성. 소스를 절대경로로 넣어 VRT 위치와 무관하게 열림.
+
+    ⚠ **`-tap` 을 반드시 준다.** 없으면 모자이크 원점이 그때그때 들어간
+    프레임 집합의 외곽에서 정해지는데, 프레임마다 원점 위상이 조금씩 달라
+    **격자가 소수 화소 어긋난다.** 그러면 두 가지가 깨진다.
+
+      ① **재현성** — 유역 밖 프레임을 하나 더 넣으면 유역 값이 바뀐다.
+         실측(2026-08-31): 2025-08-11 에 037F(37.8~39.0N)·CDCC(31.7~33.7N) 를
+         더했더니 섬진강 유역이 **한 화소도 안 겹치는데** 수체가 1.2% 움직였다.
+         격자가 0.42 화소 밀린 탓이다.
+
+      ② **연도 간 비교** — 이쪽이 더 나쁘다. 2025 와 2026 모자이크가 서로
+         **0.45~0.48 화소** 어긋나 있었다. 소비 측이 `Resampling.nearest` 로
+         읽으므로 **두 해가 서로 다른 위치를 재고 있었다.** 변화탐지에서
+         이건 계통 오차다.
+
+    `-tap -tr PIXEL_DEG PIXEL_DEG` 를 주면 모든 모자이크가 **전역 고정 격자**에
+    스냅돼 위상차가 0 이 된다(실측 0.4212 → 0.0000).
+    """
     vrt_dir.mkdir(parents=True, exist_ok=True)
     vrt_path = vrt_dir / f"mosaic_{date}_o{orbit}.vrt"
     cmd = ["gdalbuildvrt", "-srcnodata", "0", "-vrtnodata", "0", "-overwrite",
+           "-tap", "-tr", repr(PIXEL_DEG), repr(PIXEL_DEG),
            str(vrt_path), *[str(f.resolve()) for f in frames]]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
     return vrt_path
