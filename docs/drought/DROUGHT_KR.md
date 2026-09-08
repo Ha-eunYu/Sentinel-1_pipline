@@ -27,8 +27,8 @@
 
 **이 문서는 1번(무강우 구간 수면적)을 기본으로 잡는다.** SAR로 직접 관측
 가능한 양이 수면적이기 때문이다. 저수율 연계가 필요하면
-[Korea_WaterDetection_2025_2026/](../../Korea_WaterDetection_2025_2026)의 댐 저수량
-비교 작업과 붙인다.
+[gee/Korea_WaterDetection_2025_2026/](../../../gee/Korea_WaterDetection_2025_2026)의
+댐 저수량 비교 작업과 붙인다.
 
 ## 1. 판정 설계 — 지켜야 할 4가지
 

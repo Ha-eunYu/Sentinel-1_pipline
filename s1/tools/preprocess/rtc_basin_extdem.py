@@ -65,7 +65,7 @@ DEM_DIR = Path("downloads/dem_basin")
 OUT = Path("downloads/rtc_extdem")
 DATE_RE = re.compile(r"_(\d{8})T")
 
-# 유역별 1:1 관측일 쌍 — `Korea_WaterDetection_2025_2026/local_change.py`와 동일
+# 유역별 1:1 관측일 쌍 — `gee/Korea_WaterDetection_2025_2026/` 의 local_change 와 동일
 PAIRS = {"yeongsan": ("20250718", "20260720"),
          "seomjin": ("20250718", "20260720"),
          "geum": ("20250718", "20260720"),
