@@ -524,6 +524,11 @@ D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 
   재구성과 공용 모듈(paths·scene·aoi·batch_runner) 분리 내역
 - [DROUGHT_KR.md](docs/drought/DROUGHT_KR.md) — 25년 7월 대비 26년 7월 남한 가뭄 판정
   설계, 상대궤도 짝 확정, 말할 수 있는 것 / 없는 것
+- [AREA_VS_VOLUME_KR.md](docs/drought/AREA_VS_VOLUME_KR.md) — ⭐ **수면적 ≠ 저수량**:
+  SAR로 부피를 말할 수 없는 이유(`V ∝ A^((b+1)/b)`), 실측 면적 −30.5%가 저수량
+  −30~−52%로 벌어지는 폭, **"만수면적의 59%"를 "저수율 59%"로 읽으면 안 되는 이유**,
+  표기 규칙. 뒤쪽에 `geeflood`(홍수) ↔ `watercompare`(가뭄) 대비표 — **JRC 상시수체를
+  쓰는 방향이 서로 반대**다
 - [FLOOD_TIMELINE_KR.md](docs/flood/FLOOD_TIMELINE_KR.md) — **침수 시간선**: 날짜별
   위성영상·침수 면적·남북 분리, 해석 주의사항 (핵심 결과 문서)
 - [FLOOD_NORTH_KOREA_KR.md](docs/flood/FLOOD_NORTH_KOREA_KR.md) — **북한 지역 전용**:
