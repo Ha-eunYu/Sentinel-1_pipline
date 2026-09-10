@@ -59,6 +59,12 @@ VRT_DIR = WATER_OTSU_DIR / "vrt"                   # 궤도별 dB 모자이크(�
 OTSU_THRESHOLD_CSV = WATER_OTSU_DIR / "otsu_thresholds.csv"
 WATER_AREA_CSV = WATER_OTSU_DIR / "water_area_perrow.csv"
 
+# --- 지상 관측 자료(WAMIS) -------------------------------------------------
+# 댐 저수위·저수량은 SAR 이 못 재는 값이라 국가 관측망에서 받아 온다.
+# docs/drought/AREA_VS_VOLUME_KR.md §5-1 "공식 저수율을 먼저 찾는다".
+WAMIS_DIR = DOWNLOADS_DIR / "wamis"
+WAMIS_DAM_LIST_CSV = WAMIS_DIR / "dam_list.csv"      # mn_dammain 캐시(전국 79곳)
+
 # --- 벡터·보조 자료 --------------------------------------------------------
 GEOJSON_DIR = PROJECT_DIR / "geojson"
 KOREA_PENINSULA = GEOJSON_DIR / "Korea_Peninsula.geojson"

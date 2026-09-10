@@ -545,6 +545,13 @@ D298·3191 등)을 자동 재현해 검증됐다. 제외된 프레임은 실행 
   타일기반 Otsu 자동임계값 방법론·레퍼런스(Otsu 1979, Martinis 2009, Chini 2017)
 - [WATER_AREA_KR.md](docs/water/WATER_AREA_KR.md) — 궤도별·날짜별 수체 면적(pixel_perrow),
   픽셀 vs 폴리곤 면적 산출 방식
+- [WAMIS_DAM_LEVEL_KR.md](docs/water/WAMIS_DAM_LEVEL_KR.md) — ⭐ **공식 저수위·저수율
+  수집**(`s1/wamis/`): WAMIS OpenAPI 는 **인증키가 없다**(단 8080 평문 HTTP).
+  **저수량·저수율은 시자료에만** 있고 일자료에는 없다. 서버 습성 실측 — 오류를
+  200으로 답하는 것, **없는 댐코드도 "자료 없음"으로 답해 오타가 빈 CSV 가 되는 것**,
+  미래 날짜 하나에 요청 전체가 죽는 것, 끊김이 규격이 아니라 일시 스로틀인 것,
+  시자료 시작일의 00시가 빠지는 것. `AREA_VS_VOLUME_KR.md` §5-1 "공식 저수율을 먼저
+  찾는다"의 실행 경로
 - [SCENE_MONITOR_KR.md](docs/pipeline/SCENE_MONITOR_KR.md) — 한반도 신규 Sentinel-1 촬영 자동
   감시와 윈도우 백그라운드(작업 스케줄러 등) 설정
 - [SCENE_DASHBOARD_KR.md](docs/pipeline/SCENE_DASHBOARD_KR.md) — 상시 현황 창: CDSE 최신 촬영
