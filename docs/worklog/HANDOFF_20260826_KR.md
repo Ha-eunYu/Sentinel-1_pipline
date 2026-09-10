@@ -1,4 +1,4 @@
-# 인계 메모 — 2026-08-26~27 세션 (8/21~8/26 수집·RTC, 궤도 감사, POEORB 재처리)
+# 인계 메모 — 2026-08-26~09-10 (8월 수집·RTC, 궤도 감사, POEORB 재처리, NAS 이관)
 
 다음 세션이 이어받을 것만 적는다. 배경 설명은 링크로 넘긴다.
 
@@ -6,7 +6,11 @@
 [BBOX_RANGES_KR.md](../pipeline/BBOX_RANGES_KR.md) ·
 [PREPROCESSING_SPEC_KR.md](../pipeline/PREPROCESSING_SPEC_KR.md)
 
-**2026-08-27 11:00 현재 실행 중인 작업 없음.** 저녁에 3절의 명령으로 재개한다.
+**2026-09-10 현재 실행 중인 작업 없음.** 8/27 오전 이후 재처리는 멈춰 있다
+(17/30). 3 절의 명령으로 재개한다.
+
+**`downloads/rtc_grd_frost_vh/` 는 비어 있다** — 130 장(262 GB)을 NAS 로 옮기고
+로컬에서 지웠다. 6 절 참조.
 
 ---
 
@@ -205,11 +209,117 @@ st = measure(Path('<tif 경로>')); print(st.summary(), st.valid_frac >= VALID_F
 
 ---
 
+### 4.8 PowerShell 은 변수명 대소문자를 구분하지 않는다
+
+NAS 대조 스크립트에서 `$N`(해시테이블)을 루프 안의 `$n`(개수)이 덮어썼다.
+`ContainsKey` 가 정수에서 호출돼 오류가 났는데, 누락 목록이 **빈 배열로 남아
+"누락 0 건"으로 보였다.** 검사가 통과한 게 아니라 아예 수행되지 않은 것이다.
+**262 GB 를 지우기 직전이었다.** 비교용 변수는 `$locMap`/`$nasMap` 처럼
+서로 확실히 다른 이름을 쓸 것.
+
+---
+
 ## 5. 남은 것
 
-- **모자이크** — `s1.tools.mosaic.rebuild_mosaic_extdem --date <YYYYMMDD>`
-  (2026-08 의 8/21·8/23·8/24·8/26 분이 아직 안 돌았다)
+- **모자이크 VRT 92 개 재작성** — `downloads/water_otsu/vrt_vh/` 가
+  `rtc_grd_frost_vh/` 를 경로로 참조하는데 **그 폴더를 비웠다.** 지금 전부 깨져
+  있다. 연도별로 2025-07 32 · 2025-08 6 · 2026-07 37 · 2026-08 17 개다.
+  어차피 POEORB 재처리 후 경로가 바뀌므로 그때 다시 만든다.
 - **궤도 판정 로그없음 59 건** — 추론이다. 확정하려면 재처리뿐
   ([ORBIT_TYPE_AUDIT_KR.md](../pipeline/ORBIT_TYPE_AUDIT_KR.md) 2 절)
-- **2026-07 분 POEORB 재처리** — 캐시에 S1C 2026/07 8 개·S1D 9 개가 이미 있다.
-  **2026-08 분은 9 월 중순 이후**(발행 +20 일)
+- **2026-07/08 분 POEORB 재처리 100 장** — **2026-09-10 부로 가능해졌다.**
+  POEORB 는 발행 +20 일이라 8/21 이전 촬영분은 이미 나왔고 8/24·8/25 분도
+  곧 나온다. 이걸 끝내야 2025·2026 이 같은 규격이 된다.
+
+---
+
+## 6. 저장소 정리 (2026-09-09~10)
+
+F 가 **2.9 GB** 까지 차서 정리했다.
+
+### 6.1 한 것
+
+| 대상 | 용량 | 조치 |
+| --- | ---: | --- |
+| `rtc_grd_frost_vh/` 130 장 | **262 GB** | NAS 이관 후 로컬 삭제 |
+| NAS 기존 자료 3 개 | 3.8 GB | 형제 폴더로 분리 |
+
+- **NAS 경로** — `X:\02_Analysis\Sentinel-1_Drought\` (SMB).
+  같은 곳을 SSH 로는 `root@192.168.0.184:/Ubuntu/02_Analysis/Sentinel-1_Drought/`
+  로 접근한다(포트 923). X 드라이브로 진행 상황을 볼 수 있다.
+- **F 여유: 2.9 GB → 264.9 GB**
+
+원래 그 폴더에 있던 2021~2023 년 자료 3 개(`_Orb_Cal_Spk_dB_TC` 규격)는
+`X:\02_Analysis\Sentinel-1_Drought_2021-2023\` 으로 옮겼다. **하위 폴더가 아니라
+형제 폴더로 만든 이유**는 6.3 을 볼 것.
+
+### 6.2 GTC·VV 정리 상태
+
+| 대상 | 상태 |
+| --- | --- |
+| `gtc/`·GTC 파일 | **없음**(이전 세션에서 삭제, 136 GB 확보) |
+| `rtc_grd/`(Refined Lee)·`rtc_grd_frost/`(VV) | **없음** |
+| **`downloads/etc/` VV 14 개** | **남아 있음 · 14 GB** |
+
+`downloads/etc/` 는 전부 VV(`_rtc_db.tif`, `_vh` 없음)이고 2026-07-03~20 촬영분이다.
+VH 로 대체돼 이 파이프라인에서 쓰지 않는다(GEE 수체탐지가 VH 를 쓰고 실측 오프셋
+약 6 dB). **NAS 백업 후 삭제 예정 — 아직 NAS 에 안 올라갔다.**
+
+`downloads/_archive/rtc_grd_vv_meta/` 의 VV 모자이크 VRT 20 여 개는 4.9 MB 라
+당시 기록으로 남겨둔다.
+
+### 6.3 NAS 로 rsync 할 때
+
+```bash
+rsync -av --partial --progress -e "ssh -p 923" \
+  /mnt/f/06_SAR_system/S1/downloads/<폴더>/ \
+  root@192.168.0.184:/Ubuntu/02_Analysis/<대상>/
+```
+
+> ### ⚠ `--delete` 를 붙이지 말 것
+>
+> 로컬을 비운 뒤 `--delete` 로 다시 돌리면 **원본에 없는 것을 대상에서 지운다** —
+> 방금 올린 것이 통째로 사라진다. NAS 안에 만든 하위 폴더도 같은 이유로 지워진다.
+> 그래서 기존 자료를 하위가 아니라 **형제 폴더**로 뺐다.
+>
+> ### ⚠ `--partial` 을 붙일 것
+>
+> 9/9 전송이 S1D 구간에서 끊겼는데, `--partial` 이 없어 진행 중이던 파일을 통째로
+> 버렸다. 파일명 순서(S1A → S1C → S1D)로 보내므로 **S1D 27 개가 통째로 누락**됐다.
+> 파일 수만 보면 103/130 이라 눈치채기 쉽지만, 위성별로 갈라 보지 않으면
+> "거의 다 갔다"고 오판하기 쉽다.
+
+### 6.4 지우기 전 대조는 파일별 크기까지
+
+파일 수와 총용량만 맞춰서는 부족하다. **이름별로 크기를 대조**하고, 위성별
+개수도 따로 센다.
+
+```powershell
+$locMap = @{}; Get-ChildItem $localDir -File | ForEach-Object { $locMap[$_.Name] = $_.Length }
+$nasMap = @{}; Get-ChildItem $nasDir  -File | ForEach-Object { $nasMap[$_.Name] = $_.Length }
+@($locMap.Keys | Where-Object { -not $nasMap.ContainsKey($_) })                      # 누락
+@($locMap.Keys | Where-Object { $nasMap.ContainsKey($_) -and $nasMap[$_] -ne $locMap[$_] })  # 크기 불일치
+```
+
+변수명은 4.8 의 함정을 피해서 지을 것.
+
+### 6.5 F 드라이브 큰 폴더 (2026-09-09 실측, 3726 GB 중)
+
+| 폴더 | GB |
+| --- | ---: |
+| `06_SAR_system` | 1505 |
+| ├ `COP30_MGRS` | 520 |
+| ├ `S2` | 519 |
+| ├ **`S1`** | **379** |
+| ├ `SAR_SYSTEM_LOCAL_ONLY` | 58 |
+| └ `gee` | 29 |
+| `microsat` | 789 |
+| `OneDrive` | 721 |
+| `02_Jeddah` | 372 |
+| `14_Nepal_flood` | 122 |
+
+**S1 은 셋 중 가장 작다.** `COP30_MGRS`(520 GB)는 S1 파이프라인이 참조하지 않는다
+— `downloads/dem_basin/` 의 통합 GeoTIFF(4.2 GB)를 쓴다. 다른 작업 자료일 수 있어
+손대지 않았다.
+
+원본 zip 은 F 에 없다 — `sentinel1_grd` → E, `sentinel1` → D 심볼릭 링크다.
